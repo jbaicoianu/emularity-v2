@@ -1,0 +1,125 @@
+.emularity-emulator {
+  display: flex;
+  flex-direction: column;
+}
+.emularity-emulator canvas {
+  width: 100%;
+  max-width: 768px;
+  margin: 0 auto;
+  display: block;
+  order: 1;
+}
+emularity-keyboard {
+  display: flex;
+  width: 1024px;
+  max-width: 100%;
+  margin: 0 auto;
+  text-align: center;
+  order: 2;
+  justify-content: center;
+}
+emularity-keyboard div {
+  white-space: nowrap;
+}
+emularity-keyboard .keyboard-row {
+  text-align: left;
+}
+emularity-keyboard .keyboard-key {
+  width: 44px;
+  height: 44px;
+  user-select: none;
+  cursor: pointer;
+  background: #d9d0c5;
+  vertical-align: top;
+}
+emularity-keyboard .keyboard-key.function-key {
+  background: #aa9d90;
+}
+emularity-keyboard .keyboard-key:active,
+emularity-keyboard .keyboard-key.active {
+  background: #b0a394;
+}
+emularity-keyboard[layout="pc101"] .keyboard-key .key-label {
+  order: 2;
+}
+emularity-keyboard[layout="pc101"] .keyboard-key .key-label-2 {
+  order: 1;
+}
+emularity-keyboard .keyboard-key.Tab {
+  width: 54px;
+}
+emularity-keyboard .keyboard-key.CapsLock {
+  width: 64px;
+}
+emularity-keyboard .keyboard-key.Backspace {
+  width: 98px;
+}
+emularity-keyboard .keyboard-key.Enter {
+  width: 122px;
+}
+emularity-keyboard .keyboard-key.ShiftLeft {
+  width: 74px;
+}
+emularity-keyboard .keyboard-key.ShiftRight {
+  width: 68px;
+}
+emularity-keyboard .keyboard-key.ControlLeft,
+emularity-keyboard .keyboard-key.AltLeft,
+emularity-keyboard .keyboard-key.AltRight {
+  width: 60px;
+}
+emularity-keyboard .keyboard-key.Space {
+  width: 358px;
+}
+emularity-keyboard[layout="pc101"]>div>.keyboard-row {
+  display: flex;
+}
+emularity-keyboard[layout="pc101"] .keyboard-key {
+  display: flex;
+  flex-direction: column;
+}
+emularity-keyboard[layout="numpad"]>div {
+}
+emularity-keyboard[layout="numpad"]>div>.keyboard-row {
+  height: 44px;
+}
+emularity-keyboard[layout="numpad"] .keyboard-key.NumpadAdd {
+  height: 88px;
+}
+emularity-keyboard[layout="numpad"] .keyboard-key.NumpadEnter {
+  height: 88px;
+}
+emularity-keyboard[layout="numpad"] .keyboard-key.Numpad0 {
+  width: 88px;
+}
+@media screen and (max-width: 800px) {
+  emularity-keyboard[layout="pc101"] .keyboard-key {
+    width: 30px;
+  }
+  emularity-keyboard[layout="pc101"] .keyboard-key.Tab {
+    width: 34px;
+  }
+  emularity-keyboard[layout="pc101"] .keyboard-key.CapsLock {
+    width: 44px;
+  }
+  emularity-keyboard[layout="pc101"] .keyboard-key.Backspace {
+    width: 38px;
+  }
+  emularity-keyboard[layout="pc101"] .keyboard-key.Enter {
+    width: 122px;
+  }
+  emularity-keyboard[layout="pc101"] .keyboard-key.ShiftLeft {
+    width: 54px;
+  }
+  emularity-keyboard[layout="pc101"] .keyboard-key.ShiftRight {
+    width: 68px;
+  }
+  emularity-keyboard[layout="pc101"] .keyboard-key.ControlLeft,
+  emularity-keyboard[layout="pc101"] .keyboard-key.AltLeft,
+  emularity-keyboard[layout="pc101"] .keyboard-key.AltRight {
+    width: 40px;
+  }
+  emularity-keyboard[layout="pc101"] .keyboard-key.Space {
+    width: 160px;
+  }
+}

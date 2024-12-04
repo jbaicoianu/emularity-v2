@@ -1,0 +1,83 @@
+{
+  "layout": "pc-minimal",
+  "css": "pc-minimal.css",
+  "keys": [
+    [
+      {"code": "Escape", "label": "Esc", "keyCode": 27, "functionKey": true},
+      {"code": "Digit1", "label": "1", "label2": "!", "keyCode": 49},
+      {"code": "Digit2", "label": "2", "label2": "@", "keyCode": 50},
+      {"code": "Digit3", "label": "3", "label2": "#", "keyCode": 51},
+      {"code": "Digit4", "label": "4", "label2": "$", "keyCode": 52},
+      {"code": "Digit5", "label": "5", "label2": "%", "keyCode": 53},
+      {"code": "Digit6", "label": "6", "label2": "^", "keyCode": 54},
+      {"code": "Digit7", "label": "7", "label2": "&", "keyCode": 55},
+      {"code": "Digit8", "label": "8", "label2": "*", "keyCode": 56},
+      {"code": "Digit9", "label": "9", "label2": "(", "keyCode": 57},
+      {"code": "Digit0", "label": "0", "label2": ")", "keyCode": 48},
+      {"code": "Minus", "label": "-", "label2": "_", "keyCode": 189},
+      {"code": "Equal", "label": "=", "label2": "+", "keyCode": 187},
+      {"code": "Backspace", "label": "⌫", "keyCode": 8, "functionKey": true}
+    ],
+    [
+      {"code": "Tab", "label": "Tab", "keyCode": 9, "functionKey": true},
+      {"code": "KeyQ", "label": "Q", "keyCode": 81},
+      {"code": "KeyW", "label": "W", "keyCode": 87},
+      {"code": "KeyE", "label": "E", "keyCode": 69},
+      {"code": "KeyR", "label": "R", "keyCode": 82},
+      {"code": "KeyT", "label": "T", "keyCode": 84},
+      {"code": "KeyY", "label": "Y", "keyCode": 89},
+      {"code": "KeyU", "label": "U", "keyCode": 85},
+      {"code": "KeyI", "label": "I", "keyCode": 73},
+      {"code": "KeyO", "label": "O", "keyCode": 79},
+      {"code": "KeyP", "label": "P", "keyCode": 80},
+
+      {"code": "BracketLeft", "label": "[", "label2": "{", "keyCode": 219},
+      {"code": "BracketRight", "label": "]", "label2": "}", "keyCode": 220},
+      {"code": "Backslash", "label": "\\", "label2": "|", "keyCode": 219},
+      {"code": "Delete", "label": "Del", "keyCode": 46, "functionKey": true}
+    ],
+    [
+      {"code": "CapsLock", "label": "Caps", "keyCode": 20, "functionKey": true},
+      {"code": "KeyA", "label": "A", "keyCode": 65},
+      {"code": "KeyS", "label": "S", "keyCode": 83},
+      {"code": "KeyD", "label": "D", "keyCode": 68},
+      {"code": "KeyF", "label": "F", "keyCode": 70},
+      {"code": "KeyG", "label": "G", "keyCode": 71},
+      {"code": "KeyH", "label": "H", "keyCode": 72},
+      {"code": "KeyJ", "label": "J", "keyCode": 74},
+      {"code": "KeyK", "label": "K", "keyCode": 75},
+      {"code": "KeyL", "label": "L", "keyCode": 76},
+
+      {"code": "Semicolon", "label": ";", "label2": ":", "keyCode": 186},
+      {"code": "Quote", "label": "'", "label2": "\"", "keyCode": 222},
+      {"code": "Enter", "label": "⏎ Enter", "keyCode": 13, "functionKey": true}
+    ],
+    [
+      {"code": "ShiftLeft", "label": "⇧ Shift", "keyCode": 16, "functionKey": true},
+      {"code": "KeyZ", "label": "Z", "keyCode": 90},
+      {"code": "KeyX", "label": "X", "keyCode": 88},
+      {"code": "KeyC", "label": "C", "keyCode": 67},
+      {"code": "KeyV", "label": "V", "keyCode": 86},
+      {"code": "KeyB", "label": "B", "keyCode": 66},
+      {"code": "KeyN", "label": "N", "keyCode": 78},
+      {"code": "KeyM", "label": "M", "keyCode": 77},
+
+      {"code": "Comma", "label": ",", "label2": "<", "keyCode": 188},
+      {"code": "Period", "label": ".", "label2": ">", "keyCode": 190},
+      {"code": "Slash", "label": "/", "label2": "?", "keyCode": 191},
+      {"code": "ShiftRight", "label": "⇧ Shift", "keyCode": 16, "functionKey": true},
+      {"code": "ArrowUp", "label": "↑", "keyCode": 38},
+      {"code": "PrintScreen", "label": "Print", "keyCode": 44, "functionKey": true}
+    ],
+    [
+      {"code": "ControlLeft", "label": "Ctrl", "keyCode": 17, "functionKey": true},
+      {"code": "AltLeft", "label": "Alt", "keyCode": 18, "functionKey": true},
+      {"code": "Space", "label": "&nbsp;", "keyCode": 32, "functionKey": true},
+      {"code": "AltRight", "label": "Alt", "keyCode": 18, "functionKey": true},
+      {"code": "ArrowLeft", "label": "←", "keyCode": 37},
+      {"code": "ArrowDown", "label": "↓", "keyCode": 40},
+      {"code": "ArrowRight", "label": "→", "keyCode": 39}
+    ]
+  ]
+}
+
