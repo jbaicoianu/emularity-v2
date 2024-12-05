@@ -98,8 +98,11 @@ export class DOSBoxEmulator extends Emulator {
 export class DOSBoxEmulatorDrive extends VirtualFile {
   constructor() {
     super(); 
-    this.letter = this.getAttribute('letter');
     this.mounttype = 'dir';
+  }
+  connectedCallback() {
+    super.connectedCallback();
+    this.letter = this.getAttribute('letter');
     if (this.letter) {
       this.mountpoint = `/${this.letter}`;
     }
