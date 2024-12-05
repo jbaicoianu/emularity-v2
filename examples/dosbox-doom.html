@@ -1,0 +1,28 @@
+<html>
+  <head>
+    <title>Emularity v2 - DOSBox - Doom</title>
+
+    <meta charset="utf-8">
+    <meta name="viewport" content="initial-scale=1.0, user-scalable=no, maximum-scale=1.0, width=device-width" />
+
+    <script src="../node_modules/browserfs/dist/browserfs.js"></script>
+    <script type="module" src="../src/emularity.js"></script>
+
+    <link rel="stylesheet" href="../css/emularity.css">
+  </head>
+  <body bgcolor="black">
+    <emularity-dosbox exe="c:\doom.bat" wasmroot="../emulators" wasmscript="dosbox.module.js" wasminit="createDOSBox" splashlogo="../logos/emularity-transparent.png">
+      <emularity-dosbox-drive letter="c" url="https://ia801602.us.archive.org/cors_get.php?path=/34/items/doom_20231012/doom.zip"></emularity-dosbox-drive>
+      <emularity-file path="/c/doom.bat" encoding="msdos">
+        @echo off
+        c:
+        cd doom
+        del DEFAULT.CFG
+        copy .\sb16\*.*
+        doom.exe
+      </emularity-file>
+      <emularity-keyboard layout="pc101"></emularity-keyboard>
+    </emularity-dosbox>
+  </body>
+</html>
+
