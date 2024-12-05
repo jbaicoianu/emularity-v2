@@ -4,26 +4,6 @@ let canvasID = 0;
 export class BaseEmulator extends HTMLElement {
   constructor() {
     super();
-    this.FLAGS = {
-      w: { isReadable: function() { return false; },
-           isWriteable: function() { return true; },
-           isTruncating: function() { return false; },
-           isAppendable: function() { return false; },
-           isSynchronous: function() { return false; },
-           isExclusive: function() { return false; },
-           pathExistsAction: function() { return 0; },
-           pathNotExistsAction: function() { return 3; }
-         },
-      r: { isReadable: function() { return true; },
-           isWriteable: function() { return false; },
-           isTruncating: function() { return false; },
-           isAppendable: function() { return false; },
-           isSynchronous: function() { return false; },
-           isExclusive: function() { return false; },
-           pathExistsAction: function() { return 0; },
-           pathNotExistsAction: function() { return 1; }
-      }    
-    };
     this.callbacks = {};
   }
   connectedCallback() {
