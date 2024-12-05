@@ -1,7 +1,7 @@
-import { VirtualFile } from './virtualfile.js'
+import { VirtualFile } from '../fs/virtualfile.js'
 
 let canvasID = 0;
-export class Emulator extends HTMLElement {
+export class BaseEmulator extends HTMLElement {
   constructor() {
     super();
     this.FLAGS = {
@@ -446,10 +446,10 @@ export class Emulator extends HTMLElement {
     });
     return files;
   }
-  addFile(url, path) {
+  addFile(path, args={}) {
     let file = document.createElement('emularity-file');
-    file.setAttribute('url', url);
     file.setAttribute('path', path);
+    if (args.url) file.setAttribute('url', url);
     this.appendChild(file);
   }
   handleTouchStart(ev) {

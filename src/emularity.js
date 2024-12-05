@@ -1,12 +1,12 @@
-import { Emulator } from './emulator.js'
-import { VirtualFile } from './virtualfile.js'
-import { VirtualKeyboard } from './inputs.js'
+import { BaseEmulator } from './emulators/base.js'
 import { DOSBoxEmulator, DOSBoxEmulatorFloppy, DOSBoxEmulatorDrive } from './emulators/dosbox.js'
 import { MAMEEmulator } from './emulators/mame.js'
+import { VirtualFile } from './fs/virtualfile.js'
+import { VirtualKeyboard } from './inputs.js'
 
 export default {
   emulators: {
-    Emulator,
+    Emulator: BaseEmulator,
     DOSBoxEmulator,
     MAMEEmulator
   },
@@ -23,7 +23,7 @@ export default {
 
 
 if (typeof customElements != 'undefined') {
-  customElements.define('emularity-emulator', Emulator);
+  customElements.define('emularity-emulator', BaseEmulator);
   customElements.define('emularity-keyboard', VirtualKeyboard);
 
   customElements.define('emularity-file', VirtualFile);

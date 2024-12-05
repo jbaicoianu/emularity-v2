@@ -1,7 +1,7 @@
-import { Emulator } from '../emulator.js'
+import { BaseEmulator } from './base.js'
 
 /* MAME */
-export class MAMEEmulator extends Emulator {
+export class MAMEEmulator extends BaseEmulator {
   constructor() {
     super();
   }

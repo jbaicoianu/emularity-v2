@@ -1,10 +1,13 @@
-import { Emulator } from '../emulator.js'
-import { VirtualFile } from '../virtualfile.js'
+import { BaseEmulator } from './base.js'
+import { VirtualFile } from '../fs/virtualfile.js'
 
 /* DOSBox */
-export class DOSBoxEmulator extends Emulator {
+export class DOSBoxEmulator extends BaseEmulator {
   constructor() {
     super();
+  }
+  connectedCallback() {
+    super.connectedCallback();
     this.wasmroot = this.getAttribute('wasmroot') ?? '';
     this.wasmscript = this.getAttribute('wasmscript') ?? 'dosbox.module.js';
     this.scripturl = this.wasmroot + '/' + this.wasmscript;
