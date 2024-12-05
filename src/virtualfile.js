@@ -9,6 +9,7 @@ export class VirtualFile extends HTMLElement {
     this.mountpoint = this.getAttribute('mountpoint') ?? false;
     this.path = this.getAttribute('path') ?? '';
     this.label = this.getAttribute('label') ?? false;
+    this.encoding = this.getAttribute('encoding') ?? 'unix';
     let optional = this.getAttribute('optional') ?? false;
     this.optional = (!!optional && optional != 'false' && optional != '0' && optional != 'no');
   }
@@ -41,6 +42,12 @@ export class VirtualFile extends HTMLElement {
         console.error(e);
         this.dispatchEvent(new CustomEvent('error', { detail: e.message }));
       }
+    } else if (this.innerHTML.length > 0) {
+      let content = this.innerHTML;
+      if (this.encoding == 'msdos') {
+        content = content.replaceAll('\n', '\r\n');
+      }
+      this.data = new TextEncoder().encode(content);
     }
     return this;
   }
