@@ -38,7 +38,7 @@ export class VirtualFile extends HTMLElement {
           this.data = await res.arrayBuffer();
         }
       } catch (e) {
-console.error(e);
+        console.error(e);
         this.dispatchEvent(new CustomEvent('error', { detail: e.message }));
       }
     }
