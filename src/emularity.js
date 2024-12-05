@@ -5,13 +5,20 @@ import { DOSBoxEmulator, DOSBoxEmulatorFloppy, DOSBoxEmulatorDrive } from './emu
 import { MAMEEmulator } from './emulators/mame.js'
 
 export default {
-  Emulator,
-  VirtualFile,
-  VirtualKeyboard,
-  DOSBoxEmulator,
-  DOSBoxEmulatorFloppy,
-  DOSBoxEmulatorDrive,
-  MAMEEmulator
+  emulators: {
+    Emulator,
+    DOSBoxEmulator,
+    MAMEEmulator
+  },
+  input: {
+    VirtualKeyboard,
+  },
+  fs: {
+    VirtualFile,
+    DOSBoxEmulatorFloppy,
+    DOSBoxEmulatorDrive,
+  }
+
 }
 
 
