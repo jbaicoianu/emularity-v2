@@ -1,8 +1,15 @@
 export class VirtualFile extends HTMLElement {
-  constructor(url, mountpoint, label) {
+  url = false
+  mountpoint = false
+  path = ''
+  label = false
+  encoding = 'binary'
+  optional = false
+
+  constructor(settings) {
     super();
     this.data = false;
-
+    if (settings) this.setSettings(settings);
   }
   connectedCallback() {
     this.url = this.getAttribute('url') ?? false;
@@ -12,6 +19,12 @@ export class VirtualFile extends HTMLElement {
     this.encoding = this.getAttribute('encoding') ?? 'unix';
     let optional = this.getAttribute('optional') ?? false;
     this.optional = (!!optional && optional != 'false' && optional != '0' && optional != 'no');
+  }
+  setSettings(settings) {
+    for (let k in settings) {
+      this[k] = settings[k];
+      this.setAttribute(k, settings[k]);
+    }
   }
   async fetch() {
     if (this.url) {
@@ -27,7 +40,6 @@ export class VirtualFile extends HTMLElement {
           let loaded = 0;
           while (true) {
             let {done, value} = await reader.read();
-            //console.log('kachunk', value, done, loaded / contentLength);
             this.dispatchEvent(new CustomEvent('progress', { detail: { complete: loaded, total: contentLength } }));
             if (done) break;
             data.set(value, loaded);

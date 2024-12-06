@@ -3,8 +3,11 @@ import { VirtualFile } from '../fs/virtualfile.js'
 
 /* DOSBox */
 export class DOSBoxEmulator extends BaseEmulator {
-  constructor() {
-    super();
+  wasmscript = 'dosbox.module.js'
+  initfunc = 'createDOSBox'
+
+  constructor(settings) {
+    super(settings);
   }
   connectedCallback() {
     super.connectedCallback();

@@ -2,13 +2,15 @@ import { BaseEmulator } from './base.js'
 
 /* MAME */
 export class MAMEEmulator extends BaseEmulator {
-  constructor() {
-    super();
-  }
+  system = false
+
   connectedCallback() {
     this.system = this.getAttribute('system') ?? false;
     super.connectedCallback();
     this.classList.add('mame');
+  }
+  setSettings(settings) {
+    super.setSettings(settings);
   }
   initEmscriptenFilesystem(fs) {
     super.initEmscriptenFilesystem(fs);

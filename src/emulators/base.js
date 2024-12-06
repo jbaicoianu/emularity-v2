@@ -2,16 +2,35 @@ import { VirtualFile } from '../fs/virtualfile.js'
 
 let canvasID = 0;
 export class BaseEmulator extends HTMLElement {
-  constructor() {
+  arguments = ''
+  wasmroot = ''
+  wasmscript = ''
+  wasmfile = null
+  splashlogo = 'emularity-transparent.png'
+  bgcolor = '#000'
+  progressbgcolor = '#222'
+  progressfgcolor = '#090'
+  progressbordercolor = '#777'
+  progresserrorcolor = '#900'
+  progresserrorbordercolor = '#f00'
+  progresscompletebordercolor = '#0f0'
+  fontcolor = '#fff'
+  emulatorroot = '/emulator'
+  resolution = '800x600'
+  splashresolution = '800x600'
+  sound = true
+  files = {}
+
+  constructor(settings) {
     super();
-    this.callbacks = {};
+    this.settings = settings;
   }
   connectedCallback() {
     this.arguments = this.getAttribute('arguments') ?? '';
     this.wasmroot = this.getAttribute('wasmroot') ?? '';
     this.wasmscript = this.getAttribute('wasmscript') ?? '';
     this.wasmfile = this.getAttribute('wasmfile') ?? null;
-    this.initfunc = this.getAttribute('wasminit') ?? false;
+    this.wasminit = this.getAttribute('wasminit') ?? false;
     this.splashlogo = this.getAttribute('splashlogo') ?? 'emularity-transparent.png';
     this.bgcolor = this.getAttribute('bgcolor') ?? '#000';
     this.progressbgcolor = this.getAttribute('progressbgcolor') ?? '#222';
@@ -21,7 +40,6 @@ export class BaseEmulator extends HTMLElement {
     this.progresserrorbordercolor = this.getAttribute('progresserrorbordercolor') ?? '#f00';
     this.progresscompletebordercolor = this.getAttribute('progresscompletebordercolor') ?? '#0f0';
     this.fontcolor = this.getAttribute('fontcolor') ?? '#fff';
-    this.scripturl = this.wasmroot + '/' + this.wasmscript;
     this.emulatorroot = this.getAttribute('emulatorroot') ?? '/emulator';
     this.resolution = this.getAttribute('resolution') ?? '800x600';
     this.splashresolution = this.getAttribute('splashresolution') ?? this.resolution;
@@ -34,13 +52,30 @@ export class BaseEmulator extends HTMLElement {
     this.classList.add('emularity-emulator');
     if (this.scripturl) {
       setTimeout(() => {
-        this.load(this.scripturl, this.initfunc).then(module => {
+        this.load(this.scripturl, this.wasminit).then(module => {
           console.log('my module', module);
         });
       }, 0);
     }
   }
-  async load(scripturl, initfunc=null) {
+  setSettings(settings={}) {
+    for (let k in settings) {
+      this[k] = settings[k];
+      this.setAttribute(k, settings[k]);
+    }
+    this.scripturl = this.wasmroot + '/' + this.wasmscript;
+
+    if (this.files) {
+      for (let path in this.files) {
+        this.addFile(path, this.files[path]);
+      }
+    }
+  }
+  start() {
+    if (this.settings) this.setSettings(this.settings);
+    this.load(this.scripturl, this.wasminit);
+  }
+  async load(scripturl, wasminit=null) {
     let fullurl = new URL(scripturl, location.href).href;
     let scripts = document.querySelectorAll('script');
     let hasScript = false;
@@ -60,7 +95,6 @@ export class BaseEmulator extends HTMLElement {
         //module.ENV.SDL_HINT_EMSCRIPTEN_KEYBOARD_ELEMENT = "#" + this.canvas.id;
         //module.funcs.env.setenv('SDL_HINT_EMSCRIPTEN_KEYBOARD_ELEMENT', this.canvas.id);
         this.setStatus('Loading system...');
-        this.executeCallbacks('preInit');
         this.dispatchEvent(new CustomEvent('preinit'));
       },
       preRun: [ () => {
@@ -72,7 +106,6 @@ export class BaseEmulator extends HTMLElement {
         module.funcs.canvas.setEmscriptenCanvasID(this.canvas.id);
 */
         this.setStatus('Starting...');
-        this.executeCallbacks('preRun');
         this.dispatchEvent(new CustomEvent('prerun'));
       }],
       onRuntimeInitialized: () => {
@@ -86,7 +119,6 @@ export class BaseEmulator extends HTMLElement {
         }
         this.dispatchEvent(new CustomEvent('canvaschange', { detail: this.canvas }));
         this.dispatchEvent(new CustomEvent('run'));
-        this.executeCallbacks('onRuntimeInitialized');
       },
       websocket: { url: 'wss://' },
     };
@@ -105,9 +137,9 @@ export class BaseEmulator extends HTMLElement {
         script.src = scripturl;
         document.body.appendChild(script);
         script.addEventListener('load', ev => {
-          if (initfunc && initfunc in window) {
-            window[initfunc](module).then(module => resolve(module));
-          } else if (!initfunc && typeof Module != 'undefined') {
+          if (wasminit && wasminit in window) {
+            window[wasminit](module).then(module => resolve(module));
+          } else if (!wasminit && typeof Module != 'undefined') {
             window.Module = module;
             //for (let k in module) {
             //  Module[k] = module[k];
@@ -121,9 +153,9 @@ export class BaseEmulator extends HTMLElement {
         });
         
       } else {
-        if (initfunc && initfunc in window) {
-          window[initfunc](module).then(module => resolve(module));
-        } else if (!initfunc && typeof Module != 'undefined') {
+        if (wasminit && wasminit in window) {
+          window[wasminit](module).then(module => resolve(module));
+        } else if (!wasminit && typeof Module != 'undefined') {
           Module.canvas = this.getCanvas();
           //window.Module = module;
           resolve(Module);
@@ -426,10 +458,9 @@ export class BaseEmulator extends HTMLElement {
     });
     return files;
   }
-  addFile(path, args={}) {
-    let file = document.createElement('emularity-file');
+  addFile(path, file) {
     file.setAttribute('path', path);
-    if (args.url) file.setAttribute('url', url);
+    file.path = path;
     this.appendChild(file);
   }
   handleTouchStart(ev) {
@@ -445,19 +476,6 @@ export class BaseEmulator extends HTMLElement {
     this.textarea.value += '\n' + JSON.stringify(evargs);
     let newev = new KeyboardEvent(ev.type, evargs);
     return newev;
-  }
-  setCallbacks(callbacks) {
-    for (let k in callbacks) {
-      if (!(k in this.callbacks)) {
-        this.callbacks[k] = [];
-      }
-      this.callbacks[k].push(callbacks[k]);
-    }
-  }
-  executeCallbacks(type) {
-    if (type in this.callbacks) {
-      this.callbacks[type].forEach(cb => cb());
-    }
   }
 }
 
