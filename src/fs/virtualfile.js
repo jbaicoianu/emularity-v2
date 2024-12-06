@@ -1,4 +1,6 @@
-export class VirtualFile extends HTMLElement {
+import { BaseClass } from '../baseclass.js'
+
+export class VirtualFile extends BaseClass {
   url = false
   mountpoint = false
   path = ''

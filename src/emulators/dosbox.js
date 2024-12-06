@@ -4,7 +4,7 @@ import { VirtualFile } from '../fs/virtualfile.js'
 /* DOSBox */
 export class DOSBoxEmulator extends BaseEmulator {
   wasmscript = 'dosbox.module.js'
-  initfunc = 'createDOSBox'
+  wasminit = 'createDOSBox'
 
   constructor(settings) {
     super(settings);
@@ -26,6 +26,7 @@ export class DOSBoxEmulator extends BaseEmulator {
   getArguments() {
     let args = this.arguments.length > 0 ? this.arguments.split(' ') : [];
     args.push('-conf', this.emulatorroot + '/dosbox.conf');
+    args.push('-c', '"config -writeconf blah.ini"');
     return args;
   }
   getConfig() {
@@ -51,7 +52,7 @@ export class DOSBoxEmulator extends BaseEmulator {
       dpi aware = false
 
       [cpu]
-      cputype=486
+      cputype=auto
       core = simple
       cycles = fixed 30000
       use dynamic core with paging on = false
@@ -72,7 +73,6 @@ export class DOSBoxEmulator extends BaseEmulator {
 
 
       [sdl]
-      output=ttf
       doublescan=false
       showmenu=false
        

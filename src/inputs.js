@@ -1,4 +1,5 @@
-export class VirtualKeyboard extends HTMLElement {
+import { BaseClass } from './baseclass.js'
+export class VirtualKeyboard extends BaseClass {
   layout = 'pc101'
   layouts = {
     "pc101": [

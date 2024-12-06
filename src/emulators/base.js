@@ -1,7 +1,8 @@
+import { BaseClass } from '../baseclass.js'
 import { VirtualFile } from '../fs/virtualfile.js'
 
 let canvasID = 0;
-export class BaseEmulator extends HTMLElement {
+export class BaseEmulator extends BaseClass {
   arguments = ''
   wasmroot = ''
   wasmscript = ''
@@ -19,6 +20,8 @@ export class BaseEmulator extends HTMLElement {
   resolution = '800x600'
   splashresolution = '800x600'
   sound = true
+  autostart = true
+  canvas = null
   files = {}
 
   constructor(settings) {
@@ -26,37 +29,28 @@ export class BaseEmulator extends HTMLElement {
     this.settings = settings;
   }
   connectedCallback() {
-    this.arguments = this.getAttribute('arguments') ?? '';
-    this.wasmroot = this.getAttribute('wasmroot') ?? '';
-    this.wasmscript = this.getAttribute('wasmscript') ?? '';
-    this.wasmfile = this.getAttribute('wasmfile') ?? null;
-    this.wasminit = this.getAttribute('wasminit') ?? false;
-    this.splashlogo = this.getAttribute('splashlogo') ?? 'emularity-transparent.png';
-    this.bgcolor = this.getAttribute('bgcolor') ?? '#000';
-    this.progressbgcolor = this.getAttribute('progressbgcolor') ?? '#222';
-    this.progressfgcolor = this.getAttribute('progressfgcolor') ?? '#090';
-    this.progressbordercolor = this.getAttribute('progressbordercolor') ?? '#777';
-    this.progresserrorcolor = this.getAttribute('progresserrorcolor') ?? '#900';
-    this.progresserrorbordercolor = this.getAttribute('progresserrorbordercolor') ?? '#f00';
-    this.progresscompletebordercolor = this.getAttribute('progresscompletebordercolor') ?? '#0f0';
-    this.fontcolor = this.getAttribute('fontcolor') ?? '#fff';
-    this.emulatorroot = this.getAttribute('emulatorroot') ?? '/emulator';
-    this.resolution = this.getAttribute('resolution') ?? '800x600';
-    this.splashresolution = this.getAttribute('splashresolution') ?? this.resolution;
-    this.sound = this.getAttribute('sound') ?? true;
-
-    if (this.sound == 'false' || this.sound == '0') this.sound = false;
-
-    this.status = 'Initializing...';
-    this.systemname = this.getAttribute('systemname') ?? "emulatatron2";
+    if (!this.settings) this.settings = {};
+    this.loadSettingsFromAttributes();
     this.classList.add('emularity-emulator');
-    if (this.scripturl) {
+    this.status = 'Initializing...';
+    if (this.autostart) {
       setTimeout(() => {
-        this.load(this.scripturl, this.wasminit).then(module => {
-          console.log('my module', module);
-        });
+        this.start();
       }, 0);
     }
+  }
+  loadSettingsFromAttributes() {
+    let properties = Object.getOwnPropertyNames(this);
+    properties.forEach(propname => {
+      if (this.hasAttribute(propname)) {
+        this.settings[propname] = this.getAttribute(propname);
+      }
+    });
+
+    if (this.sound == 'false' || this.sound == '0') this.sound = false;
+    if (this.autostart == 'false' || this.autostart == '0') this.autostart = false;
+
+    this.setSettings(this.settings);
   }
   setSettings(settings={}) {
     for (let k in settings) {
@@ -73,15 +67,79 @@ export class BaseEmulator extends HTMLElement {
   }
   start() {
     if (this.settings) this.setSettings(this.settings);
-    this.load(this.scripturl, this.wasminit);
+    this.initLoadingScreen().then(() => {
+      this.load(this.scripturl, this.wasminit);
+    });
   }
   async load(scripturl, wasminit=null) {
     let fullurl = new URL(scripturl, location.href).href;
-    let scripts = document.querySelectorAll('script');
     let hasScript = false;
+    this.module = await this.initModule();
+    if (wasminit !== null) {
+      hasScript = (typeof self[wasminit] != 'undefined');
+    } else {
+      if (typeof importScripts == 'function') {
+        hasScript = (typeof Module != 'undefined');
+      } else {
+        let scripts = document.querySelectorAll('script');
 
-    await this.initLoadingScreen();
 
+        scripts.forEach(script => {
+          if (script.src == fullurl) {
+            //hasScript = true;
+          }
+        });
+      }
+    }
+    return new Promise(resolve => {
+      if (!hasScript) {
+        if (typeof document == 'undefined') {
+          self.Module = this.module;
+          self.screen = { width: 1024, height: 768 };
+          if (this.module.canvas instanceof OffscreenCanvas) {
+            this.module.canvas.style = {};
+          }
+          this.module.specialHTMLTargets = [this.module.canvas];
+          this.module.specialHTMLTargets['#canvas'] = this.module.canvas;
+          importScripts(scripturl);
+          this.handleScriptLoad();
+        } else {
+          window.Module = this.module;
+          let script = document.createElement('script');
+          script.src = scripturl;
+          document.body.appendChild(script);
+          script.addEventListener('load', ev => {
+            this.handleScriptLoad();
+          });
+        }
+      } else {
+        this.handleScriptLoad();
+      }
+    });
+  }
+  async handleScriptLoad() {
+    let module = this.module;
+    return new Promise(resolve => {
+      if (this.wasminit && this.wasminit in self) {
+        self[this.wasminit](module).then(module => {
+          resolve(module)
+        });
+      } else if (!this.wasminit && typeof Module != 'undefined') {
+        //window.Module = module;
+        //for (let k in module) {
+        //  Module[k] = module[k];
+        //}
+/*
+        Module.preInit = module.preInit;
+        Module.preRun = module.preRun;
+        Module.onRuntimeInitialized = module.onRuntimeInitialized;
+        Module.canvas = module.canvas;
+*/
+        resolve(module);
+      }
+    });
+  }
+  async initModule() {
     let success = await this.preinitFilesystem();
 
     if (!success) {
@@ -98,7 +156,7 @@ export class BaseEmulator extends HTMLElement {
         this.dispatchEvent(new CustomEvent('preinit'));
       },
       preRun: [ () => {
-        this.initEmscriptenFilesystem(module.FS || window.FS);
+        this.initEmscriptenFilesystem(module.FS || self.FS);
         module.elementPointerLock = false;
         //module.ENV.SDL_HINT_EMSCRIPTEN_KEYBOARD_ELEMENT = "#" + this.canvas.id;
 /*
@@ -111,10 +169,10 @@ export class BaseEmulator extends HTMLElement {
       onRuntimeInitialized: () => {
         this.setStatus('Running');
         // Replace splash canvas with emulator canvas, and emit an event
-        if (this.splashcanvas.parentNode) {
+        if (this.splashcanvas && this.splashcanvas.parentNode) {
           this.splashcanvas.parentNode.removeChild(this.splashcanvas);
         }
-        if (this.canvas.parentNode != this) {
+        if (this.canvas && this.canvas.parentNode != this) {
           this.appendChild(this.canvas);
         }
         this.dispatchEvent(new CustomEvent('canvaschange', { detail: this.canvas }));
@@ -125,78 +183,55 @@ export class BaseEmulator extends HTMLElement {
     if (this.wasmfileloader && this.wasmfileloader.data) {
       module.wasmBinary = this.wasmfileloader.data;
     }
-    window.Module = module;
-    scripts.forEach(script => {
-      if (script.src == fullurl) {
-        //hasScript = true;
-      }
-    });
-    return new Promise(resolve => {
-      if (!hasScript) {
-        let script = document.createElement('script');
-        script.src = scripturl;
-        document.body.appendChild(script);
-        script.addEventListener('load', ev => {
-          if (wasminit && wasminit in window) {
-            window[wasminit](module).then(module => resolve(module));
-          } else if (!wasminit && typeof Module != 'undefined') {
-            window.Module = module;
-            //for (let k in module) {
-            //  Module[k] = module[k];
-            //}
-            Module.preInit = module.preInit;
-            Module.preRun = module.preRun;
-            Module.onRuntimeInitialized = module.onRuntimeInitialized;
-            Module.canvas = module.canvas;
-            resolve(Module);
-          }
-        });
-        
-      } else {
-        if (wasminit && wasminit in window) {
-          window[wasminit](module).then(module => resolve(module));
-        } else if (!wasminit && typeof Module != 'undefined') {
-          Module.canvas = this.getCanvas();
-          //window.Module = module;
-          resolve(Module);
-        }
-      }
-    });
+    return module;
   }
   getCanvas() {
     if (!this.canvas) {
-      let canvas = document.createElement('canvas');
-      this.canvas = canvas;
-      canvas.id = 'canvas'// + canvasID++;
-      let res = this.getResolution();
-      canvas.width = res.x;
-      canvas.height = res.y;
-      this.canvas = canvas;
+      if (typeof document != 'undefined') {
+        let canvas = document.createElement('canvas');
+        this.canvas = canvas;
+        canvas.id = 'canvas'// + canvasID++;
+        let res = this.getResolution();
+        canvas.width = res.x;
+        canvas.height = res.y;
+        this.canvas = canvas;
+      } else {
+        // TODO - do something with OffscreenCanvas here, eg, pass a canvas from the main thread
+      }
     }
+        let canvas = this.canvas;
+        canvas.id = 'canvas'// + canvasID++;
+        let res = this.getResolution();
+        canvas.width = res.x;
+        canvas.height = res.y;
     return this.canvas;
   }
   initLoadingScreen() {
     return new Promise(resolve => {
-      let canvas = document.createElement('canvas');
-      let res = this.getResolution(this.splashresolution);
-      canvas.width = res.x;
-      canvas.height = res.y;
-      this.appendChild(canvas);
-      this.splashcanvas = canvas;
-      this.splashctx = canvas.getContext('2d');
-      canvas.addEventListener('touchstart', ev => this.handleTouchStart(ev));
-      if (this.splashlogo) {
-        let img = new Image();
-        img.src = this.splashlogo;
-        this.logo = img;
-        img.addEventListener('load', ev => {
-          this.drawLogo();
+      if (typeof document != 'undefined') {
+        let canvas = document.createElement('canvas');
+        let res = this.getResolution(this.splashresolution);
+        canvas.width = res.x;
+        canvas.height = res.y;
+        this.appendChild(canvas);
+        this.splashcanvas = canvas;
+        this.splashctx = canvas.getContext('2d');
+        canvas.addEventListener('touchstart', ev => this.handleTouchStart(ev));
+        if (this.splashlogo) {
+          let img = new Image();
+          img.src = this.splashlogo;
+          this.logo = img;
+          img.addEventListener('load', ev => {
+            this.drawLogo();
+            resolve();
+          });
+        } else {
           resolve();
-        });
+        }
       } else {
+        // Running in a worker - what should we do hereo?
         resolve();
       }
-
     });
   }
   getResolution(resstr) {
@@ -404,13 +439,13 @@ export class BaseEmulator extends HTMLElement {
     this.fs = fs;
     fs.mkdir(this.emulatorroot);
     // FIXME - we shouldn't need to do this when running with modules!
-    window.FS = fs;
-    if (!window.PATH && this.module.PATH) window.PATH = this.module.PATH;
-    if (!window.ERRNO_CODES && this.module.ERRNO_CODES) window.ERRNO_CODES = this.module.ERRNO_CODES;
-    this.module.PATH = window.PATH;
-    this.module.ERRNO_CODES = window.ERRNO_CODES;
+    self.FS = fs;
+    if (!self.PATH && this.module.PATH) self.PATH = this.module.PATH;
+    if (!self.ERRNO_CODES && this.module.ERRNO_CODES) self.ERRNO_CODES = this.module.ERRNO_CODES;
+    this.module.PATH = self.PATH;
+    this.module.ERRNO_CODES = self.ERRNO_CODES;
     //this.module.FS.PATH = this.module.PATH;
-    window.Module = this.module;
+    self.Module = this.module;
 
     BrowserFS.initialize(this.bfs);
     let emscriptenfs = new BrowserFS.EmscriptenFS();
@@ -445,9 +480,10 @@ export class BaseEmulator extends HTMLElement {
     let files = [];
     if (this.scripturl) {
       // Prefetch WASM file so we have a nice progress bar in the UI for it
-      let wasmfile = document.createElement('emularity-file');
-      wasmfile.url = this.wasmfile ? this.wasmroot + '/' + this.wasmfile : this.scripturl.replace('.js', '.wasm');
-      wasmfile.label = 'Emulator System';
+      let wasmfile = new VirtualFile({
+        url: this.wasmfile ? this.wasmroot + '/' + this.wasmfile : this.scripturl.replace('.js', '.wasm'),
+        label: 'Emulator System',
+      });
       files.push(wasmfile);
       this.wasmfileloader = wasmfile;
     }
