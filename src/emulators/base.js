@@ -7,6 +7,7 @@ export class BaseEmulator extends BaseClass {
   wasmroot = ''
   wasmscript = ''
   wasmfile = null
+  wasminit = ''
   splashlogo = 'emularity-transparent.png'
   bgcolor = '#000'
   progressbgcolor = '#222'
