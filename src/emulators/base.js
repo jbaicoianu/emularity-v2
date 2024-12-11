@@ -48,8 +48,8 @@ export class BaseEmulator extends BaseClass {
       }
     });
 
-    if (this.sound == 'false' || this.sound == '0') this.sound = false;
-    if (this.autostart == 'false' || this.autostart == '0') this.autostart = false;
+    if (this.settings['sound'] == 'false' || this.settings['sound'] == '0') this.settings['sound'] = false;
+    if (this.settings['autostart'] == 'false' || this.settings['autostart'] == '0') this.settings['autostart'] = false;
 
     this.setSettings(this.settings);
   }
