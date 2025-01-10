@@ -47,6 +47,7 @@ emularity-keyboard[layout="ti-82"] .keyboard-key {
   border: 0;
   box-shadow: 5px 5px 0px #222;
   margin: 1.4em 4px 4px 4px;
+  outline: none;
 }
 emularity-keyboard[layout="ti-82"] .keyboard-key:active,
 emularity-keyboard[layout="ti-82"] .keyboard-key.active {

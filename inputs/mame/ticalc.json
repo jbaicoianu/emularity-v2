@@ -1,0 +1,71 @@
+[
+  {
+    "layout": "ti-82",
+    "css": "ticalc-ti82.css",
+    "keys": [
+      [
+        {"code": "F1", "label": "Y=", "label2": "STAT PLOT", "keyCode": 97, "className": "function"},
+        {"code": "F2", "label": "WINDOW", "label2": "TblSet", "keyCode": 97, "className": "function"},
+        {"code": "F3", "label": "ZOOM", "keyCode": 97, "className": "function"},
+        {"code": "F4", "label": "TRACE", "label2": "CALC", "keyCode": 97, "className": "function"},
+        {"code": "F5", "label": "GRAPH", "label2": "TABLE", "keyCode": 97, "className": "function"}
+      ],
+      [
+        {"code": "AltLeft", "label": "2nd", "keyCode": 97, "className": "second beginrow"},
+        {"code": "Escape", "label": "MODE", "label2": "QUIT", "keyCode": 97},
+        {"code": "Delete", "label": "DEL", "label2": "INS", "keyCode": 97, "className": "endrow"},
+
+        {"code": "ShiftLeft", "label": "ALPHA", "label2": "A-LOCK", "keyCode": 97, "className": "numeric beginrow"},
+        {"code": "KeyX", "label": "X,T,θ", "label2": "LINK", "keyCode": 97},
+        {"code": "Backquote", "label": "STAT", "label2": "LIST", "keyCode": 97, "className": "endrow"},
+
+        {"code": "F6", "label": "MATH", "label2": "TEST", "label3": "A", "keyCode": 97, "className": "beginrow"},
+        {"code": "F7", "label": "MATRX", "label2": "ANGLE", "label3": "B", "keyCode": 97},
+        {"code": "F8", "label": "PRGM", "label2": "DRAW", "label3": "C", "keyCode": 97},
+        {"code": "F9", "label": "VARS", "label2": "Y-VARS", "keyCode": 97},
+        {"code": "PageDown", "label": "CLEAR", "keyCode": 97},
+
+        {"code": "Comma", "label": "𝓍⁻¹", "label2": "ABS", "label3": "D", "keyCode": 97},
+        {"code": "Insert", "label": "SIN", "label2": "SIN⁻¹", "label3": "E", "keyCode": 97},
+        {"code": "Home", "label": "COS", "label2": "COS⁻¹", "label3": "F", "keyCode": 97},
+        {"code": "PageUp", "label": "TAN", "label2": "TAN⁻¹", "label3": "G", "keyCode": 97},
+        {"code": "KeyP", "label": "^", "label2": "π", "label3": "H", "keyCode": 97},
+
+        {"code": "Semicolon", "label": "𝓍²", "label2": "√", "label3": "I", "keyCode": 97},
+        {"code": "End", "label": ",", "label2": "EE", "label3": "J", "keyCode": 97},
+        {"code": "BracketLeft", "label": "(", "label2": "{", "label3": "K", "keyCode": 97},
+        {"code": "BracketRight", "label": ")", "label2": "}", "label3": "L", "keyCode": 97},
+        {"code": "Slash", "label": "÷", "label3": "M", "keyCode": 97, "className": "operation"},
+
+        {"code": "Quote", "label": "LOG", "label2": "10ˣ", "label3": "N", "keyCode": 97},
+        {"code": "Digit7", "label": "7", "label2": "Uₙ₋₁", "label3": "O", "keyCode": 97, "className": "numeric"},
+        {"code": "Digit8", "label": "8", "label2": "Vₙ₋₁", "label3": "P", "keyCode": 97, "className": "numeric"},
+        {"code": "Digit9", "label": "9", "label2": "𝓃", "label3": "Q", "keyCode": 97, "className": "numeric"},
+        {"code": "KeyL", "label": "✕", "label2": "[", "label3": "R", "keyCode": 97, "className": "operation"},
+
+        {"code": "Backslash", "label": "LN", "label2": "eˣ", "label3": "S", "keyCode": 97},
+        {"code": "Digit4", "label": "4", "label2": "L4", "label3": "T", "keyCode": 97, "className": "numeric"},
+        {"code": "Digit5", "label": "5", "label2": "L5", "label3": "U", "keyCode": 97, "className": "numeric"},
+        {"code": "Digit6", "label": "6", "label2": "L6", "label3": "V", "keyCode": 97, "className": "numeric"},
+        {"code": "Minus", "label": "−", "label2": "]", "label3": "W", "keyCode": 97, "className": "operation"},
+
+        {"code": "KeyS", "label": "STO▶", "label2": "RCL", "label3": "X", "keyCode": 97},
+        {"code": "Digit1", "label": "1", "label2": "L1", "label3": "Y", "keyCode": 97, "className": "numeric"},
+        {"code": "Digit2", "label": "2", "label2": "L2", "label3": "Z", "keyCode": 97, "className": "numeric"},
+        {"code": "Digit3", "label": "3", "label2": "L3", "label3": "θ", "keyCode": 97, "className": "numeric"},
+        {"code": "Equal", "label": "+", "label2": "MEM", "label3": "'", "keyCode": 97, "className": "operation"},
+
+        {"code": "KeyQ", "label": "ON", "label2": "OFF", "keyCode": 97, "className": "onoff"},
+        {"code": "Digit0", "label": "0", "label3": "␣", "keyCode": 97, "className": "numeric"},
+        {"code": "Period", "label": ".", "label2": ":", "keyCode": 97, "className": "numeric"},
+        {"code": "KeyM", "label": "(-)", "label2": "ANS", "label3": "?", "keyCode": 97, "className": "numeric"},
+        {"code": "Enter", "label": "ENTER", "label2": "ENTRY", "keyCode": 97, "className": "enter"},
+
+        {"code": "ArrowLeft", "label": "◀", "keyCode": 97, "className": "operation arrow_left"},
+        {"code": "ArrowRight", "label": "▶", "keyCode": 97, "className": "operation arrow_right"},
+        {"code": "ArrowUp", "label": "▲", "keyCode": 97, "className": "operation arrow_up"},
+        {"code": "ArrowDown", "label": "▼", "keyCode": 97, "className": "operation arrow_down"}
+      ]
+    ]
+  }
+]
