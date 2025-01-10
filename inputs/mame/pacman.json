@@ -1,0 +1,11 @@
+{
+  "layout": "mame-pacman",
+  "css": "pacman.css",
+  "keys": [
+    [
+      {"code": "Digit5", "label": "Add Coin", "keyCode": 97, "className": "add_coin"},
+      {"code": "Digit1", "label": "Player 1", "keyCode": 97, "className": "start"},
+      {"code": "Digit2", "label": "Player 2", "keyCode": 97, "className": "start"}
+    ]
+  ]
+}
