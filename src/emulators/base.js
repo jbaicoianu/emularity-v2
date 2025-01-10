@@ -33,6 +33,7 @@ export class BaseEmulator extends BaseClass {
   constructor(settings) {
     super();
     this.settings = settings;
+    this.extraargs = [] ;
   }
   connectedCallback() {
     if (!this.settings) this.settings = {};
@@ -362,13 +363,16 @@ export class BaseEmulator extends BaseClass {
     let value = bytes;
     for (let i = 0; i < labels.length; i++) {
       if (value < 1024) {
-        return +value.toFixed(1) + labels[i];
+        return (+value).toFixed(1) + labels[i];
       }
       value /= 1024;
     }
   }
   getArguments() {
     let args = this.arguments.length > 0 ? this.arguments.split(' ') : [];
+    if (this.extraargs.length > 0) {
+      args.push.apply(args, this.extraargs);
+    }
     return args;
   }
   async preinitFilesystem() {
@@ -513,6 +517,9 @@ export class BaseEmulator extends BaseClass {
     file.setAttribute('path', path);
     file.path = path;
     this.appendChild(file);
+  }
+  addArgument() {
+    this.extraargs.push.apply(this.extraargs, arguments);
   }
   handleTouchStart(ev) {
 
