@@ -24,6 +24,11 @@ export class BaseEmulator extends BaseClass {
   autostart = true
   canvas = null
   files = {}
+  oncreate = null
+  onpreinit = null
+  onprerun = null
+  oncanvaschange = null
+  onrun = null
 
   constructor(settings) {
     super();
@@ -34,6 +39,15 @@ export class BaseEmulator extends BaseClass {
     this.loadSettingsFromAttributes();
     this.classList.add('emularity-emulator');
     this.status = 'Initializing...';
+
+    if (this.oncreate) this.addEventListener('create', ev => new Function(this.oncreate).call(this, ev));
+    if (this.onpreinit) this.addEventListener('preinit', ev => new Function(this.onpreinit).call(this, ev));
+    if (this.onprerun) this.addEventListener('prerun', ev => new Function(this.onprerun).call(this, ev));
+    if (this.onrun) this.addEventListener('run', ev => new Function(this.onrun).call(this, ev));
+    if (this.oncanvaschange) this.addEventListener('canvaschange', ev => new Function(this.oncanvaschange).call(this, ev));
+
+    this.dispatchEvent(new CustomEvent('create'));
+
     if (this.autostart) {
       setTimeout(() => {
         this.start();
