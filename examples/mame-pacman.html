@@ -1,0 +1,23 @@
+<html>
+  <head>
+    <title>Emularity v2 - MAME - Pacman</title>
+
+    <meta charset="utf-8">
+    <meta name="viewport" content="initial-scale=1.0, user-scalable=no, maximum-scale=1.0, width=device-width" />
+
+    <script src="../node_modules/browserfs/dist/browserfs.js"></script>
+    <script type="module" src="../src/emularity.js"></script>
+
+    <link rel="stylesheet" href="../css/emularity.css">
+    <link rel="stylesheet" href="../inputs/ticalc/ti82.css">
+  </head>
+  <body bgcolor="black">
+    <emularity-mame wasmroot="../emulators/mame" wasmscript="mamepacman.module.js" wasminit="MAMEPACMAN" system="pacman" splashlogo="../logos/emularity-transparent.png" bgcolor="#a5bdab" progressbgcolor="#a5bdab" progressfgcolor="#556572" progressbordercolor="#000" progresscompletebordercolor="#49c8d7" fontcolor="white" arguments="-verbose -samplerate 48000">
+      <emularity-file label="Game Data" url="https://ia600201.us.archive.org/cors_get.php?path=/11/items/pacman_mame_2/pacman.zip" path="/pacman.zip"></emularity-file>
+      <emularity-keyboard src="../inputs/mame/pacman.json" layout="mame-pacman"></emularity-keyboard>
+    </emularity-mame>
+  </body>
+</html>
+
+
+

@@ -9,12 +9,11 @@
     <script type="module" src="../src/emularity.js"></script>
 
     <link rel="stylesheet" href="../css/emularity.css">
-    <link rel="stylesheet" href="../inputs/ticalc/ti82.css">
   </head>
   <body bgcolor="black">
-    <emularity-mame wasmroot="../emulators/mame" wasmscript="mameti85.module.js" wasminit="MAMETI85" system="ti82" splashlogo="../logos/emularity-transparent.png" resolution="96x64" splashresolution="300x210" sound="false" bgcolor="#a5bdab" progressbgcolor="#a5bdab" progressfgcolor="#556572" progressbordercolor="#000" progresscompletebordercolor="#49c8d7" fontcolor="white">
+    <emularity-mame wasmroot="../emulators/mame" wasmscript="mameti85.module.js" wasminit="MAMETI85" system="ti82" splashlogo="../logos/emularity-transparent.png" resolution="960x640" splashresolution="300x210" sound="false" bgcolor="#a5bdab" progressbgcolor="#a5bdab" progressfgcolor="#556572" progressbordercolor="#000" progresscompletebordercolor="#49c8d7" fontcolor="white" arguments="-nvram_directory /emulator/nvram">
       <emularity-file label="BIOS" url="https://emularity-bios.ux-b.archive.org/ti82.zip" path="/ti82.zip"></emularity-file>
-      <emularity-keyboard layout="ti-82"></emularity-keyboard>
+      <emularity-keyboard src="../inputs/mame/ticalc.json" layout="ti-82"></emularity-keyboard>
     </emularity-mame>
   </body>
 </html>

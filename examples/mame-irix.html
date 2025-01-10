@@ -1,0 +1,24 @@
+<html>
+  <head>
+    <title>Emularity v2 - MAME - TI-82</title>
+
+    <meta charset="utf-8">
+    <meta name="viewport" content="initial-scale=1.0, user-scalable=no, maximum-scale=1.0, width=device-width" />
+
+    <script src="../node_modules/browserfs/dist/browserfs.js"></script>
+    <script type="module" src="../src/emularity.js"></script>
+
+    <link rel="stylesheet" href="../css/emularity.css">
+  </head>
+  <body bgcolor="black">
+    <emularity-mame wasmroot="../emulators/mame" wasmscript="mameindy4610.module.js" wasminit="MAMEINDY4610" system="indy_4610" arguments="-gio64_gfx xl24 -hard1 /emulator/irix65/irix65.chd -nodrc -cfg_directory /emulator -noka -verbose" resolution="1600x1600" splashlogo="../logos/emularity-transparent.png">
+      <emularity-file url="/~bai/janusweb/test/emulators/systems/sgi/indy_4610.zip" path="/indy_4610.zip"></emularity-file>
+      <emularity-file url="/~bai/janusweb/test/emulators/systems/sgi/irix65.zip" mountpoint="/irix65"></emularity-file>
+      <emularity-file url="/~bai/janusweb/test/emulators/systems/sgi/indy_4610.cfg" path="/indy_4610.cfg"></emularity-file>
+      <emularity-keyboard layout="pc101"></emularity-keyboard>
+    </emularity-mame>
+  </body>
+</html>
+
+
+
