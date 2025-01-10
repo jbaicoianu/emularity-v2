@@ -491,6 +491,10 @@ export class BaseEmulator extends BaseClass {
           }
         }
       } else if (f.path && f.data) {
+        let pathparts = f.path.split('/');
+        let fname = pathparts.pop();
+        pathparts.unshift(this.emulatorroot);
+        fs.mkdirTree(pathparts.join('/'));
         fs.writeFile(this.emulatorroot + f.path, f.data);
       }
     });
