@@ -1,0 +1,138 @@
+<html>
+  <head>
+    <title>Chocolate Doom</title>
+
+    <meta charset="utf-8">
+    <meta name="viewport" content="initial-scale=1.0, user-scalable=no, maximum-scale=1.0, width=device-width" />
+
+    <script src="../node_modules/browserfs/dist/browserfs.js"></script>
+    <script type="module" src="../src/emularity.js"></script>
+
+    <link rel="stylesheet" href="../css/emularity.css">
+  </head>
+  <body bgcolor="black">
+    <script>
+      function initCustomWad(emu) {
+        let urlargs = new URLSearchParams(document.location.search),
+            wadname = urlargs.get('wadname'),
+            wadurl = urlargs.get('wadurl'),
+            warp = urlargs.get('warp');
+        if (wadname && wadurl) {
+          let wadfile = document.createElement('emularity-file');
+          wadfile.setAttribute('url', wadurl);
+          wadfile.path = `/${wadname}.wad`;
+          emu.addFile(wadfile.path, wadfile);
+          emu.addArgument('-file', `/emulator/${wadname}.wad`);
+          if (warp) {
+            let w = warp.split(' ');
+            if (w.length > 0) {
+              emu.addArgument('-warp');
+              emu.addArgument(w[0]);
+            }
+            if (w.length > 1) {
+              emu.addArgument(w[1]);
+            }
+          }
+        }
+      }
+class DoomSelector extends HTMLElement {
+  games = {
+    "doomsw": { "label": "Doom Shareware", "url": "https://ia801404.us.archive.org/cors_get.php?path=/1/items/DoomsharewareEpisode/doom.ZIP", "mountpoint": "/doomsw", "wadpath": "/emulator/doomsw/DOOM1.WAD" },
+    "freedoom": { "label": "Freedoom - Phase 1", "url": "https://ia800800.us.archive.org/cors_get.php?path=/18/items/fdprev-v13/FDPREV-v13.zip", "mountpoint": "/freedoom", "wadpath": "/emulator/freedoom/FREEDM1.WAD" },
+    "freedoom2": { "label": "Freedoom - Phase 2", "url": "https://ia800800.us.archive.org/cors_get.php?path=/18/items/fdprev-v13/FDPREV-v13.zip", "mountpoint": "/freedoom", "wadpath": "/emulator/freedoom/FREEDM2.WAD" },
+  }
+  connectedCallback() {
+    this.addEventListener('dragover', ev => this.handleDragOver(ev));
+    this.addEventListener('drop', ev => this.handleDrop(ev));
+    for (let game in this.games) {
+      let item = document.createElement('doom-selector-item');
+      item.set(this.games[game]);
+      this.appendChild(item);
+      item.addEventListener('click', ev => this.handleSelectItem(this.games[game]));
+    } 
+  }
+  handleSelectItem(item) {
+    console.log('play the game', item);
+    let emu = this.parentNode;
+    let wadfile = document.createElement('emularity-file');
+    wadfile.setAttribute('url', item.url);
+    if (item.mountpoint) wadfile.setAttribute('mountpoint', item.mountpoint);
+    if (item.path) {
+      wadfile.setAttribute('path', item.path);
+      wadfile.path = item.path; // FIXME - weird
+    }
+
+    emu.addFile(wadfile.path, wadfile);
+    emu.addArgument('-iwad', item.wadpath);
+    emu.start();
+    this.parentNode.removeChild(this);
+  }
+  handleDragOver(ev) {
+    ev.preventDefault();
+  }
+  handleDrop(ev) {
+    if (ev.dataTransfer.files && ev.dataTransfer.files.length > 0) {
+        [...ev.dataTransfer.files].forEach(file => {
+          console.log('got a file', file);
+          let item = { label: file.name, url: URL.createObjectURL(file), path: '/' + file.name, wadpath: '/emulator/' + file.name };
+          this.handleSelectItem(item);
+        });
+    }
+    ev.preventDefault();
+  }
+}
+class DoomSelectorItem extends HTMLElement {
+  set(item) {
+    this.innerHTML = item.label;
+  }
+}
+customElements.define('doom-selector', DoomSelector);
+customElements.define('doom-selector-item', DoomSelectorItem);
+    </script>
+    <emularity-emulator wasmroot="../emulators/chocolate-doom" wasmscript="/chocolate-doom.js" splashlogo="https://baicoianu.com/~bai/emularity-v2/logos/emularity-transparent.png" arguments="-window -config /emulator/doom.cfg -extraconfig /emulator/chocolate-doom.cfg" onclick="if (this.running) { this.canvas.requestPointerLock(); this.canvas.requestFullscreen().then(() => navigator.keyboard.lock(['KeyW', 'KeyS', 'KeyA', 'KeyD', 'Escape']).then(d => console.log('lock and load', d))); ; event.stopPropagation(); event.preventDefault(); }" oncreate="initCustomWad(this)" autostart="false">
+      <emularity-file path="/doom.cfg" encoding="msdos">
+mouse_sensitivity             9
+key_right                     77
+key_left                      75
+key_up                        17
+key_down                      31
+key_strafeleft                30
+key_straferight               32
+use_mouse                     1
+mouseb_fire                   0
+mouseb_strafe                 1
+mouseb_forward                2
+mouseb_speed                  -1
+screenblocks                  10
+snd_channels                  32
+
+      </emularity-file>
+      <emularity-file path="/chocolate-doom.cfg" encoding="msdos">
+novert                        1
+startup_delay                 0
+mouseb_prevweapon             4
+mouseb_nextweapon             3
+      </emularity-file>
+      <doom-selector></doom-selector>
+    </emularity-emulator>
+<style type="text/css">
+.emularity-emulator canvas {
+  width: 100%;
+  max-width: none;
+  max-height: 100vh;
+}
+doom-selector {
+  color: white;
+}
+doom-selector-item {
+  display: block;
+}
+doom-selector-item:hover {
+  background: #009;
+}
+</style>
+  </body>
+</html>
+
+
+
