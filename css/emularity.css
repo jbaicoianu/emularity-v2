@@ -9,6 +9,9 @@
   display: block;
   order: 1;
 }
+emularity-file {
+  display: none;
+}
 emularity-keyboard {
   display: flex;
   width: 1024px;
