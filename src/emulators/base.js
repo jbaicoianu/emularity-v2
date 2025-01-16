@@ -32,6 +32,8 @@ export class BaseEmulator extends BaseClass {
 
   constructor(settings) {
     super();
+    this.started = false;
+    this.running = false;
     this.settings = settings;
     this.extraargs = [] ;
   }
@@ -82,10 +84,13 @@ export class BaseEmulator extends BaseClass {
     }
   }
   start() {
-    if (this.settings) this.setSettings(this.settings);
-    this.initLoadingScreen().then(() => {
-      this.load(this.scripturl, this.wasminit);
-    });
+    if (!this.started) {
+      this.started = true;
+      if (this.settings) this.setSettings(this.settings);
+      this.initLoadingScreen().then(() => {
+        this.load(this.scripturl, this.wasminit);
+      });
+    }
   }
   async load(scripturl, wasminit=null) {
     let fullurl = new URL(scripturl, location.href).href;
@@ -183,6 +188,7 @@ export class BaseEmulator extends BaseClass {
         this.dispatchEvent(new CustomEvent('prerun'));
       }],
       onRuntimeInitialized: () => {
+        this.running = true;
         this.setStatus('Running');
         // Replace splash canvas with emulator canvas, and emit an event
         if (this.splashcanvas && this.splashcanvas.parentNode) {
