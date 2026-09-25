@@ -5,7 +5,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="initial-scale=1.0, user-scalable=no, maximum-scale=1.0, width=device-width" />
 
-    <script src="../node_modules/browserfs/dist/browserfs.js"></script>
+    <script src="../vendor/browserfs.js"></script>
     <script type="module" src="../src/emularity.js"></script>
 
     <link rel="stylesheet" href="../css/emularity.css">
@@ -37,22 +37,43 @@
       }
 class DoomSelector extends HTMLElement {
   games = {
-    "doomsw": { "label": "Doom Shareware", "url": "https://ia801404.us.archive.org/cors_get.php?path=/1/items/DoomsharewareEpisode/doom.ZIP", "mountpoint": "/doomsw", "wadpath": "/emulator/doomsw/DOOM1.WAD" },
-    "freedoom": { "label": "Freedoom - Phase 1", "url": "https://ia800800.us.archive.org/cors_get.php?path=/18/items/fdprev-v13/FDPREV-v13.zip", "mountpoint": "/freedoom", "wadpath": "/emulator/freedoom/FREEDM1.WAD" },
-    "freedoom2": { "label": "Freedoom - Phase 2", "url": "https://ia800800.us.archive.org/cors_get.php?path=/18/items/fdprev-v13/FDPREV-v13.zip", "mountpoint": "/freedoom", "wadpath": "/emulator/freedoom/FREEDM2.WAD" },
+    "doomsw": { "label": "Doom (Shareware)", "description": "Episode 1: Knee-Deep in the Dead", "url": "https://ia801404.us.archive.org/cors_get.php?path=/1/items/DoomsharewareEpisode/doom.ZIP", "mountpoint": "/doomsw", "wadpath": "/emulator/doomsw/DOOM1.WAD" },
+    "freedoom": { "label": "Freedoom: Phase 1", "description": "Free Doom-style replacement episodes", "url": "https://ia800800.us.archive.org/cors_get.php?path=/18/items/fdprev-v13/FDPREV-v13.zip", "mountpoint": "/freedoom", "wadpath": "/emulator/freedoom/FREEDM1.WAD" },
+    "freedoom2": { "label": "Freedoom: Phase 2", "description": "Free Doom II-style replacement game", "url": "https://ia800800.us.archive.org/cors_get.php?path=/18/items/fdprev-v13/FDPREV-v13.zip", "mountpoint": "/freedoom", "wadpath": "/emulator/freedoom/FREEDM2.WAD" },
   }
   connectedCallback() {
     this.addEventListener('dragover', ev => this.handleDragOver(ev));
+    this.addEventListener('dragleave', ev => this.handleDragLeave(ev));
     this.addEventListener('drop', ev => this.handleDrop(ev));
+
+    this.innerHTML = `
+      <h2>Choose a game</h2>
+      <p class="selector-intro">Chocolate Doom needs a game data file (an IWAD) to play. Pick one of these free games to get started:</p>
+    `;
+    let list = document.createElement('div');
+    list.className = 'selector-games';
     for (let game in this.games) {
       let item = document.createElement('doom-selector-item');
       item.set(this.games[game]);
-      this.appendChild(item);
+      list.appendChild(item);
       item.addEventListener('click', ev => this.handleSelectItem(this.games[game]));
-    } 
+    }
+    this.appendChild(list);
+
+    this.fileinput = document.createElement('input');
+    this.fileinput.type = 'file';
+    this.fileinput.accept = '.wad,.WAD';
+    this.fileinput.style.display = 'none';
+    this.fileinput.addEventListener('change', ev => this.handleFiles(this.fileinput.files));
+
+    let dropzone = document.createElement('div');
+    dropzone.className = 'selector-dropzone';
+    dropzone.innerHTML = 'Own the real thing? Drag and drop the <strong>DOOM.WAD</strong> or <strong>DOOM2.WAD</strong> from your copy of Doom, Doom&nbsp;II, or Final Doom onto this page (or click here to browse) to play the full game. Your file stays on your computer.';
+    dropzone.addEventListener('click', ev => this.fileinput.click());
+    this.appendChild(dropzone);
+    this.appendChild(this.fileinput);
   }
   handleSelectItem(item) {
-    console.log('play the game', item);
     let emu = this.parentNode;
     let wadfile = document.createElement('emularity-file');
     wadfile.setAttribute('url', item.url);
@@ -65,25 +86,34 @@ class DoomSelector extends HTMLElement {
     emu.addFile(wadfile.path, wadfile);
     emu.addArgument('-iwad', item.wadpath);
     emu.start();
-    this.parentNode.removeChild(this);
+    if (this.parentNode) this.parentNode.removeChild(this);
+  }
+  handleFiles(files) {
+    [...files].forEach(file => {
+      let item = { label: file.name, url: URL.createObjectURL(file), path: '/' + file.name, wadpath: '/emulator/' + file.name };
+      this.handleSelectItem(item);
+    });
   }
   handleDragOver(ev) {
+    this.classList.add('dragging');
     ev.preventDefault();
   }
+  handleDragLeave(ev) {
+    this.classList.remove('dragging');
+  }
   handleDrop(ev) {
+    this.classList.remove('dragging');
     if (ev.dataTransfer.files && ev.dataTransfer.files.length > 0) {
-        [...ev.dataTransfer.files].forEach(file => {
-          console.log('got a file', file);
-          let item = { label: file.name, url: URL.createObjectURL(file), path: '/' + file.name, wadpath: '/emulator/' + file.name };
-          this.handleSelectItem(item);
-        });
+      this.handleFiles(ev.dataTransfer.files);
     }
     ev.preventDefault();
   }
 }
 class DoomSelectorItem extends HTMLElement {
   set(item) {
-    this.innerHTML = item.label;
+    this.innerHTML = '<span class="game-label"></span><span class="game-description"></span>';
+    this.querySelector('.game-label').textContent = item.label;
+    this.querySelector('.game-description').textContent = item.description || '';
   }
 }
 customElements.define('doom-selector', DoomSelector);
@@ -122,13 +152,64 @@ mouseb_nextweapon             3
   max-height: 100vh;
 }
 doom-selector {
-  color: white;
+  display: block;
+  max-width: 480px;
+  margin: 2em auto;
+  padding: 0 1em;
+  color: #ddd;
+  font-family: sans-serif;
+}
+doom-selector h2 {
+  margin-bottom: .25em;
+  text-align: center;
+  color: #fff;
+}
+doom-selector .selector-intro {
+  margin-top: 0;
+  text-align: center;
+  color: #999;
 }
 doom-selector-item {
   display: block;
+  background: #111;
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: .75em 1em;
+  margin: .5em 0;
+  cursor: pointer;
 }
 doom-selector-item:hover {
-  background: #009;
+  border-color: #49c8d7;
+  background: #161c1d;
+}
+doom-selector-item .game-label {
+  display: block;
+  font-weight: bold;
+  color: #fff;
+}
+doom-selector-item .game-description {
+  display: block;
+  font-size: .85em;
+  color: #999;
+}
+doom-selector .selector-dropzone {
+  margin-top: 1.25em;
+  border: 2px dashed #555;
+  border-radius: 8px;
+  padding: 1em;
+  font-size: .9em;
+  line-height: 1.5;
+  text-align: center;
+  color: #999;
+  cursor: pointer;
+}
+doom-selector .selector-dropzone strong {
+  color: #ddd;
+}
+doom-selector .selector-dropzone:hover,
+doom-selector.dragging .selector-dropzone {
+  border-color: #49c8d7;
+  color: #ccc;
 }
 </style>
   </body>
