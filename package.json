@@ -6,9 +6,7 @@
   "directories": {
     "example": "examples"
   },
-  "dependencies": {
-    "browserfs": "^1.4.3"
-  },
+  "dependencies": {},
   "devDependencies": {},
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
