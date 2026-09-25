@@ -94,7 +94,7 @@ The [`examples/`](examples/) directory contains working demos, also hosted at
 |---|---|---|
 | [`dosbox-doom.html`](examples/dosbox-doom.html) | DOSBox | Mounting a zip as a drive, inline batch file, virtual keyboard |
 | [`mame-pacman.html`](examples/mame-pacman.html) | MAME | Arcade emulation, custom arcade control panel, themed loading screen |
-| [`mame-apple2e.html`](examples/mame-apple2e.html) | MAME | Apple IIe booting a floppy image (Oregon Trail), remote emulator builds |
+| [`mame-apple2e.html`](examples/mame-apple2e.html) | MAME | Apple IIe booting a floppy image (Oregon Trail) |
 | [`mame-ti82.html`](examples/mame-ti82.html) | MAME | TI-82 calculator with a custom on-screen keypad, persistent NVRAM directory |
 | [`mame-irix.html`](examples/mame-irix.html) | MAME | SGI Indy booting IRIX from a CHD hard disk image |
 | [`chocolate-doom.html`](examples/chocolate-doom.html) | Chocolate Doom | Generic emulator element, game selector UI, drag-and-drop WADs, pointer lock / fullscreen, URL parameters |
