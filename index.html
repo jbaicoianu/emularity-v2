@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>Emularity v2 - Examples</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+      body {
+        margin: 0;
+        background: #000;
+        color: #ddd;
+        font-family: sans-serif;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        min-height: 100vh;
+      }
+      header {
+        text-align: center;
+        padding: 2em 1em 0;
+      }
+      header img {
+        max-width: 420px;
+        width: 80%;
+      }
+      header p {
+        color: #999;
+        max-width: 600px;
+        margin: 1em auto;
+      }
+      header a {
+        color: #49c8d7;
+      }
+      main {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 1em;
+        padding: 2em 1em;
+        width: 100%;
+        max-width: 960px;
+        box-sizing: border-box;
+      }
+      a.example {
+        display: block;
+        background: #111;
+        border: 1px solid #333;
+        border-radius: 8px;
+        padding: 1.25em;
+        color: inherit;
+        text-decoration: none;
+        transition: border-color .15s, background .15s;
+      }
+      a.example:hover {
+        border-color: #49c8d7;
+        background: #161c1d;
+      }
+      a.example h2 {
+        margin: 0 0 .25em;
+        font-size: 1.1em;
+        color: #fff;
+      }
+      a.example .emulator {
+        display: inline-block;
+        font-size: .75em;
+        color: #49c8d7;
+        border: 1px solid #2a6a72;
+        border-radius: 4px;
+        padding: .1em .5em;
+        margin-bottom: .75em;
+      }
+      a.example .broken {
+        display: inline-block;
+        font-size: .75em;
+        color: #f66;
+        border: 1px solid #922;
+        background: #200;
+        border-radius: 4px;
+        padding: .1em .5em;
+        margin-bottom: .75em;
+        text-transform: uppercase;
+        letter-spacing: .05em;
+      }
+      a.example p {
+        margin: 0;
+        font-size: .9em;
+        color: #999;
+        line-height: 1.4;
+      }
+      footer {
+        margin-top: auto;
+        padding: 1.5em;
+        font-size: .85em;
+        color: #666;
+      }
+      footer a {
+        color: #49c8d7;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <img src="logos/emularity-transparent.png" alt="Emularity">
+      <p>
+        Easy emulation in the browser. Each example below boots a real machine as
+        WebAssembly, described entirely with HTML custom elements.
+        See the <a href="https://github.com/jbaicoianu/emularity-v2">README</a> for
+        documentation.
+      </p>
+    </header>
+    <main>
+      <a class="example" href="examples/dosbox-doom.html">
+        <h2>Doom</h2>
+        <span class="emulator">DOSBox</span>
+        <p>Mounts a zip from archive.org as the C: drive and launches Doom via an
+           inline batch file, with an on-screen PC keyboard.</p>
+      </a>
+      <a class="example" href="examples/chocolate-doom.html">
+        <h2>Chocolate Doom</h2>
+        <span class="emulator">Native port</span>
+        <p>The generic emulator element driving a native Emscripten port. Pick a WAD
+           from the menu, drag and drop your own, or pass one by URL parameter.</p>
+      </a>
+      <a class="example" href="examples/mame-pacman.html">
+        <h2>Pac-Man</h2>
+        <span class="emulator">MAME</span>
+        <span class="broken">Broken</span>
+        <p>Arcade emulation with a custom on-screen control panel for coin-up and
+           player start buttons.</p>
+      </a>
+      <a class="example" href="examples/mame-apple2e.html">
+        <h2>Apple IIe &mdash; Oregon Trail</h2>
+        <span class="emulator">MAME</span>
+        <span class="broken">Broken</span>
+        <p>Boots an Apple IIe from a floppy disk image, loading the emulator build
+           from a remote server.</p>
+      </a>
+      <a class="example" href="examples/mame-ti82.html">
+        <h2>TI-82 Calculator</h2>
+        <span class="emulator">MAME</span>
+        <p>A graphing calculator with a custom on-screen keypad and a themed,
+           calculator-green loading screen.</p>
+      </a>
+      <a class="example" href="examples/mame-irix.html">
+        <h2>SGI Indy &mdash; IRIX 6.5</h2>
+        <span class="emulator">MAME</span>
+        <span class="broken">Broken</span>
+        <p>A full SGI Indy workstation booting IRIX from a CHD hard disk image.
+           (Disk images not included &mdash; requires locally-hosted files.)</p>
+      </a>
+    </main>
+    <footer>
+      <a href="https://github.com/jbaicoianu/emularity-v2">Emularity v2 on GitHub</a>
+      &mdash; GPL-3.0-or-later
+    </footer>
+  </body>
+</html>
