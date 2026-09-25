@@ -212,9 +212,10 @@ Emularity v2 is a work in progress. The API is still settling, and some rough ed
 remain (IndexedDB persistence is currently disabled, gamepad/arcade controls are in
 development). Bug reports and pull requests are welcome.
 
-## Credits
+## Who is responsible for this?
 
-- The original [Emularity](https://github.com/db48x/emularity) by db48x, Jason Scott,
+- Emularity v2 was written by James Baicoianu
+- The original [Emularity](https://github.com/db48x/emularity) by db48x, Jason Scott, James Baicoianu,
   and the Internet Archive team, which pioneered mass in-browser emulation
 - [MAME](https://www.mamedev.org/), [DOSBox](https://www.dosbox.com/), and
   [Chocolate Doom](https://www.chocolate-doom.org/), the emulators doing the real work
