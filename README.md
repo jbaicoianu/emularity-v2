@@ -50,18 +50,18 @@ endings), generates a `dosbox.conf`, and starts the emulator.
 
 ## Features
 
-- **Declarative HTML API**: machines are described with custom elements and
+- **Declarative HTML API** - machines are described with custom elements and
   attributes, no JavaScript required for common cases
-- **Multiple emulators**: DOSBox and MAME have dedicated elements; any
+- **Multiple emulators** - DOSBox and MAME have dedicated elements; any
   Emscripten-compiled emulator (e.g. Chocolate Doom) can be driven through the generic
   `<emularity-emulator>` element
-- **Virtual filesystem**: powered by [BrowserFS](https://github.com/jvilk/BrowserFS)
+- **Virtual filesystem** - powered by [BrowserFS](https://github.com/jvilk/BrowserFS)
   (vendored in [`vendor/`](vendor/)), so remote zips can be mounted as directories or
   drives, and files can be fetched from URLs or defined inline in the page
-- **Loading screen**: configurable splash logo, colors, and per-file progress bars
-- **Virtual keyboards**: on-screen touch controls, from a full PC 101-key layout to
+- **Loading screen** - configurable splash logo, colors, and per-file progress bars
+- **Virtual keyboards** - on-screen touch controls, from a full PC 101-key layout to
   custom per-machine layouts (arcade buttons, calculator keypads) defined in JSON + CSS
-- **Scriptable**: lifecycle events and a small JavaScript API for dynamically adding
+- **Scriptable** - lifecycle events and a small JavaScript API for dynamically adding
   files and arguments before boot
 
 ## Getting started
