@@ -98,6 +98,7 @@ The [`examples/`](examples/) directory contains working demos, also hosted at
 | [`mame-ti82.html`](examples/mame-ti82.html) | MAME | TI-82 calculator with a custom on-screen keypad, persistent NVRAM directory |
 | [`mame-irix.html`](examples/mame-irix.html) | MAME | SGI Indy booting IRIX from a CHD hard disk image |
 | [`chocolate-doom.html`](examples/chocolate-doom.html) | Chocolate Doom | Generic emulator element, game selector UI, drag-and-drop WADs, pointer lock / fullscreen, URL parameters |
+| [`collection.html`](examples/collection.html) | DOSBox + MAME | Experimental personal software library: add titles by URL, upload, or archive.org search; persists in browser storage |
 
 Precompiled WebAssembly builds of DOSBox, several MAME drivers, and Chocolate Doom are
 included in [`emulators/`](emulators/).
@@ -122,6 +123,7 @@ it with emulator-specific configuration.
 | `splashlogo` | | URL of the logo shown on the loading screen |
 | `sound` | `true` | Set to `false` to disable audio |
 | `autostart` | `true` | Set to `false` to defer booting until you call `.start()` |
+| `persist` | | Store name for persisting this machine's writes (saves, NVRAM) to IndexedDB, restored on later visits. Give each machine/title its own name; omit for memory-only |
 | `emulatorroot` | `/emulator` | Mount point of the virtual filesystem inside the emulator |
 | `bgcolor`, `fontcolor` | | Loading screen background and text colors |
 | `progressbgcolor`, `progressfgcolor`, `progressbordercolor`, `progresscompletebordercolor`, `progresserrorcolor`, `progresserrorbordercolor` | | Progress bar colors |

@@ -1,0 +1,808 @@
+<html>
+  <head>
+    <title>Emularity v2 - My Collection</title>
+
+    <meta charset="utf-8">
+    <meta name="viewport" content="initial-scale=1.0, user-scalable=no, maximum-scale=1.0, width=device-width" />
+
+    <script src="../vendor/browserfs.js"></script>
+    <script type="module" src="../src/emularity.js"></script>
+
+    <link rel="stylesheet" href="../css/emularity.css">
+    <style>
+      body {
+        margin: 0;
+        background: #000;
+        color: #ddd;
+        font-family: sans-serif;
+      }
+      emularity-collection {
+        display: block;
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 1em;
+      }
+      emularity-collection header {
+        text-align: center;
+        padding: 1em 0;
+      }
+      emularity-collection header img {
+        max-width: 300px;
+        width: 60%;
+      }
+      emularity-collection header p {
+        color: #999;
+        margin: .5em 0 0;
+      }
+      .platform-tabs {
+        display: flex;
+        justify-content: center;
+        gap: .5em;
+        margin: 1em 0;
+      }
+      .platform-tabs button {
+        background: #111;
+        color: #ddd;
+        border: 1px solid #333;
+        border-radius: 8px;
+        padding: .6em 1.2em;
+        font-size: 1em;
+        cursor: pointer;
+      }
+      .platform-tabs button .sublabel {
+        display: block;
+        font-size: .7em;
+        color: #777;
+      }
+      .platform-tabs button:hover {
+        border-color: #49c8d7;
+      }
+      .platform-tabs button.active {
+        border-color: #49c8d7;
+        color: #49c8d7;
+        background: #0c1c1f;
+      }
+      .game-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: .75em;
+        margin: 1em 0;
+      }
+      .game-card {
+        position: relative;
+        background: #111;
+        border: 1px solid #333;
+        border-radius: 8px;
+        padding: 1em;
+        cursor: pointer;
+        min-height: 4.5em;
+        box-sizing: border-box;
+      }
+      .game-card:hover {
+        border-color: #49c8d7;
+        background: #161c1d;
+      }
+      .game-card .game-title {
+        display: block;
+        font-weight: bold;
+        color: #fff;
+        margin-bottom: .35em;
+        padding-right: 1.25em;
+      }
+      .game-card .game-detail {
+        display: block;
+        font-size: .8em;
+        color: #888;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .game-card .game-delete, .game-card .game-reset {
+        position: absolute;
+        top: .4em;
+        color: #666;
+        background: none;
+        border: none;
+        font-size: 1em;
+        cursor: pointer;
+      }
+      .game-card .game-delete {
+        right: .5em;
+      }
+      .game-card .game-delete:hover {
+        color: #f66;
+      }
+      .game-card .game-reset {
+        right: 2em;
+      }
+      .game-card .game-reset:hover {
+        color: #fc6;
+      }
+      .game-card.add-card {
+        border-style: dashed;
+        border-color: #555;
+        color: #999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+      }
+      .game-card.add-card:hover {
+        border-color: #49c8d7;
+        color: #ccc;
+      }
+      .empty-note {
+        text-align: center;
+        color: #777;
+        margin: 1em;
+      }
+      dialog {
+        background: #111;
+        color: #ddd;
+        border: 1px solid #444;
+        border-radius: 8px;
+        padding: 1.5em;
+        width: 480px;
+        max-width: 90vw;
+      }
+      dialog::backdrop {
+        background: rgba(0, 0, 0, .7);
+      }
+      dialog h3 {
+        margin-top: 0;
+        color: #fff;
+      }
+      dialog .close-dialog {
+        position: absolute;
+        top: .75em;
+        right: .75em;
+        background: none;
+        border: none;
+        color: #888;
+        font-size: 1.2em;
+        cursor: pointer;
+      }
+      .add-tabs {
+        display: flex;
+        gap: .25em;
+        border-bottom: 1px solid #333;
+        margin-bottom: 1em;
+      }
+      .add-tabs button {
+        background: none;
+        border: none;
+        color: #999;
+        padding: .5em .75em;
+        font-size: .9em;
+        cursor: pointer;
+        border-bottom: 2px solid transparent;
+      }
+      .add-tabs button.active {
+        color: #49c8d7;
+        border-bottom-color: #49c8d7;
+      }
+      dialog label {
+        display: block;
+        margin: .75em 0;
+        font-size: .9em;
+        color: #aaa;
+      }
+      dialog input[type="text"], dialog input[type="url"], dialog input[type="file"], dialog input[type="search"] {
+        display: block;
+        width: 100%;
+        box-sizing: border-box;
+        margin-top: .25em;
+        background: #000;
+        color: #ddd;
+        border: 1px solid #444;
+        border-radius: 4px;
+        padding: .5em;
+        font-size: 1em;
+      }
+      dialog .field-hint {
+        font-size: .8em;
+        color: #666;
+        margin: .25em 0 0;
+      }
+      dialog .primary {
+        background: #0c1c1f;
+        color: #49c8d7;
+        border: 1px solid #49c8d7;
+        border-radius: 6px;
+        padding: .5em 1.25em;
+        font-size: 1em;
+        cursor: pointer;
+        margin-top: .5em;
+      }
+      dialog .primary:hover {
+        background: #12292d;
+      }
+      dialog .error-note {
+        color: #f66;
+        font-size: .85em;
+        margin: .5em 0 0;
+        min-height: 1.2em;
+      }
+      .search-row {
+        display: flex;
+        align-items: center;
+        gap: .5em;
+      }
+      .search-row input {
+        flex: 1;
+      }
+      .search-filter {
+        font-family: monospace;
+        font-size: .75em;
+        color: #3a8a94;
+        border: 1px solid #1e4a50;
+        border-radius: 999px;
+        padding: .2em .7em;
+        white-space: nowrap;
+        cursor: default;
+      }
+      .search-results.loading {
+        opacity: .5;
+      }
+      .search-results {
+        max-height: 40vh;
+        overflow-y: auto;
+        margin-top: .75em;
+      }
+      .search-more {
+        text-align: center;
+        padding: .6em;
+        font-size: .8em;
+        color: #777;
+      }
+      .search-result {
+        display: flex;
+        align-items: center;
+        gap: .75em;
+        padding: .5em;
+        border-bottom: 1px solid #222;
+        cursor: pointer;
+      }
+      .search-result:hover {
+        background: #161c1d;
+      }
+      .search-result img {
+        width: 48px;
+        height: 48px;
+        object-fit: cover;
+        border-radius: 4px;
+        background: #222;
+        flex-shrink: 0;
+      }
+      .search-result .result-title {
+        color: #fff;
+        font-size: .9em;
+      }
+      .search-result .result-detail {
+        color: #777;
+        font-size: .75em;
+      }
+      .player-bar {
+        display: flex;
+        align-items: center;
+        gap: 1em;
+        padding: .5em 1em;
+        background: #111;
+        border-bottom: 1px solid #333;
+      }
+      .player-bar button {
+        background: none;
+        border: 1px solid #444;
+        border-radius: 6px;
+        color: #ddd;
+        padding: .4em .9em;
+        cursor: pointer;
+      }
+      .player-bar button:hover {
+        border-color: #49c8d7;
+        color: #49c8d7;
+      }
+      .player-bar .player-title {
+        color: #fff;
+        font-weight: bold;
+      }
+    </style>
+  </head>
+  <body>
+    <emularity-collection></emularity-collection>
+
+    <script>
+const STORAGE_KEY = 'emularity-collection';
+
+const PLATFORMS = {
+  "dos": {
+    label: 'IBM PC',
+    sublabel: 'DOSBox',
+    query: 'emulator:(dosbox)',
+    accept: '.zip,.img,.ima',
+    urlHint: 'A zip file, mounted as drive C:',
+    exeField: true,
+  },
+  "apple2e": {
+    label: 'Apple IIe',
+    sublabel: 'MAME',
+    query: 'emulator:(apple2ee)',
+    accept: '.dsk,.do,.po,.nib,.woz',
+    urlHint: 'A floppy disk image (.dsk, .do, .po, .nib, .woz)',
+    exeField: false,
+  },
+};
+
+/* Tiny promise wrapper around IndexedDB, used to persist uploaded software */
+const filedb = {
+  open() {
+    if (this._db) return Promise.resolve(this._db);
+    return new Promise((resolve, reject) => {
+      let req = indexedDB.open('emularity-collection', 1);
+      req.onupgradeneeded = ev => ev.target.result.createObjectStore('files');
+      req.onsuccess = ev => { this._db = ev.target.result; resolve(this._db); };
+      req.onerror = ev => reject(req.error);
+    });
+  },
+  async put(id, blob) {
+    let db = await this.open();
+    return new Promise((resolve, reject) => {
+      let tx = db.transaction('files', 'readwrite');
+      tx.objectStore('files').put(blob, id);
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
+    });
+  },
+  async get(id) {
+    let db = await this.open();
+    return new Promise((resolve, reject) => {
+      let req = db.transaction('files').objectStore('files').get(id);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  },
+  async delete(id) {
+    let db = await this.open();
+    return new Promise((resolve, reject) => {
+      let tx = db.transaction('files', 'readwrite');
+      tx.objectStore('files').delete(id);
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
+    });
+  },
+};
+
+const SEARCH_ROWS = 50;
+
+async function searchArchive(query, page = 1, rows = SEARCH_ROWS) {
+  let params = new URLSearchParams();
+  params.append('q', query);
+  ['identifier', 'title', 'year'].forEach(f => params.append('fl[]', f));
+  params.append('sort[]', 'downloads desc');
+  params.append('rows', String(rows));
+  params.append('page', String(page));
+  params.append('output', 'json');
+  let res = await fetch('https://archive.org/advancedsearch.php?' + params);
+  let data = await res.json();
+  return { docs: data.response.docs, total: data.response.numFound };
+}
+
+/* Given an archive.org identifier, figure out the software file to load and how to start it */
+async function resolveArchiveItem(identifier) {
+  let res = await fetch('https://archive.org/metadata/' + identifier);
+  let data = await res.json();
+  let meta = data.metadata || {};
+  let ext = (meta.emulator_ext || '').toLowerCase();
+  let file = ext ? data.files.find(f => f.name.toLowerCase().endsWith('.' + ext)) : null;
+  if (!file) file = data.files.find(f => /\.(zip|dsk|do|po|nib|woz|img|ima)$/i.test(f.name));
+  if (!file) throw new Error('No usable software file found in this item');
+  return {
+    title: (Array.isArray(meta.title) ? meta.title[0] : meta.title) || identifier,
+    filename: file.name,
+    url: `https://cors.archive.org/cors/${identifier}/${encodeURIComponent(file.name)}`,
+    exe: meta.emulator_start || '',
+  };
+}
+
+/* Convert an archive.org-style start path ('GAMEDIR/GAME.EXE') into autoexec commands */
+function exeToAutoexec(exe) {
+  if (!exe) return '';
+  if (exe.includes('\n') || /^[a-z]:/i.test(exe)) return exe; // already explicit commands
+  let parts = exe.replace(/\\/g, '/').split('/').filter(p => p.length);
+  let prog = parts.pop();
+  let lines = ['c:'];
+  if (parts.length) lines.push('cd \\' + parts.join('\\'));
+  lines.push(prog);
+  return lines.join('\n');
+}
+
+class EmularityCollection extends HTMLElement {
+  connectedCallback() {
+    let stored = {};
+    try { stored = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; } catch (e) {}
+    this.items = stored.items || [];
+    this.platform = PLATFORMS[stored.platform] ? stored.platform : Object.keys(PLATFORMS)[0];
+    this.render();
+  }
+  save() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ platform: this.platform, items: this.items }));
+    } catch (e) {
+      console.error('Failed to save collection', e);
+    }
+  }
+  render() {
+    this.innerHTML = `
+      <header>
+        <img src="../logos/emularity-transparent.png" alt="Emularity">
+        <p>Your personal software collection. Pick a platform, add software, click to play.</p>
+      </header>
+      <div class="platform-tabs"></div>
+      <div class="game-grid"></div>
+      <p class="empty-note" style="display: none">No software installed for this platform yet. Click "Add software" to get started.</p>
+    `;
+    this.renderTabs();
+    this.renderGrid();
+    this.buildDialog();
+  }
+  renderTabs() {
+    let tabs = this.querySelector('.platform-tabs');
+    tabs.innerHTML = '';
+    for (let key in PLATFORMS) {
+      let btn = document.createElement('button');
+      btn.innerHTML = '<span class="label"></span><span class="sublabel"></span>';
+      btn.querySelector('.label').textContent = PLATFORMS[key].label;
+      btn.querySelector('.sublabel').textContent = PLATFORMS[key].sublabel;
+      if (key == this.platform) btn.classList.add('active');
+      btn.addEventListener('click', () => {
+        this.platform = key;
+        this.save();
+        this.renderTabs();
+        this.renderGrid();
+      });
+      tabs.appendChild(btn);
+    }
+  }
+  renderGrid() {
+    let grid = this.querySelector('.game-grid');
+    grid.innerHTML = '';
+    let items = this.items.filter(item => item.platform == this.platform);
+    items.forEach(item => {
+      let card = document.createElement('div');
+      card.className = 'game-card';
+      card.innerHTML = '<span class="game-title"></span><span class="game-detail"></span><button class="game-reset" title="Reset saved data">⟲</button><button class="game-delete" title="Remove from collection">✕</button>';
+      card.querySelector('.game-title').textContent = item.title;
+      card.querySelector('.game-detail').textContent = item.source == 'upload' ? item.filename + ' (uploaded)' : item.filename;
+      card.addEventListener('click', () => this.play(item));
+      card.querySelector('.game-delete').addEventListener('click', ev => {
+        ev.stopPropagation();
+        this.remove(item);
+      });
+      card.querySelector('.game-reset').addEventListener('click', ev => {
+        ev.stopPropagation();
+        this.resetSaves(item);
+      });
+      grid.appendChild(card);
+    });
+
+    let addcard = document.createElement('div');
+    addcard.className = 'game-card add-card';
+    addcard.textContent = '+ Add software';
+    addcard.addEventListener('click', () => this.openDialog());
+    grid.appendChild(addcard);
+
+    this.querySelector('.empty-note').style.display = items.length ? 'none' : 'block';
+  }
+  add(item) {
+    item.id = 'sw-' + Date.now() + '-' + this.items.length;
+    item.platform = this.platform;
+    this.items.push(item);
+    this.save();
+    this.renderGrid();
+    return item;
+  }
+  async resetSaves(item) {
+    if (!confirm(`Reset saved data for "${item.title}"? Saves, high scores, and settings written by this title will be permanently erased. The software itself stays in your collection.`)) return;
+    await new Promise((resolve, reject) => {
+      let req = indexedDB.deleteDatabase('collection-' + item.id);
+      req.onsuccess = resolve;
+      req.onblocked = resolve; // nothing holds the db open in the library view
+      req.onerror = () => reject(req.error);
+    }).catch(e => alert('Failed to reset saved data: ' + e));
+  }
+  async remove(item) {
+    if (!confirm(`Remove "${item.title}" from your collection?`)) return;
+    this.items = this.items.filter(i => i != item);
+    if (item.source == 'upload') {
+      try { await filedb.delete(item.id); } catch (e) { console.error(e); }
+    }
+    this.save();
+    this.renderGrid();
+  }
+
+  /* ===== Playing ===== */
+
+  async play(item) {
+    let url = item.url;
+    if (item.source == 'upload') {
+      let blob = await filedb.get(item.id);
+      if (!blob) {
+        alert('The uploaded file for this title is missing from browser storage. Remove it and add it again.');
+        return;
+      }
+      url = URL.createObjectURL(blob);
+    }
+
+    let emu;
+    if (item.platform == 'dos') {
+      emu = document.createElement('emularity-dosbox');
+      emu.setAttribute('wasmroot', '../emulators/dosbox');
+      emu.setAttribute('splashlogo', '../logos/emularity-transparent.png');
+      if (item.exe) emu.setAttribute('exe', exeToAutoexec(item.exe));
+      let media = document.createElement(/\.(img|ima)$/i.test(item.filename) ? 'emularity-dosbox-floppy' : 'emularity-dosbox-drive');
+      media.setAttribute('letter', media.tagName.toLowerCase().includes('floppy') ? 'a' : 'c');
+      media.setAttribute('url', url);
+      media.setAttribute('label', item.title);
+      emu.appendChild(media);
+    } else if (item.platform == 'apple2e') {
+      let ext = item.filename.match(/\.([a-z0-9]+)$/i);
+      let path = '/software.' + (ext ? ext[1].toLowerCase() : 'dsk');
+      emu = document.createElement('emularity-mame');
+      emu.setAttribute('wasmroot', '../emulators/mame');
+      emu.setAttribute('wasmscript', 'mameapple2e.module.js');
+      emu.setAttribute('wasminit', 'MAMEAPPLE2E');
+      emu.setAttribute('system', 'apple2e');
+      emu.setAttribute('arguments', '-flop1 /emulator' + path);
+      emu.setAttribute('splashlogo', '../logos/emularity-transparent.png');
+      let bios = document.createElement('emularity-file');
+      bios.setAttribute('url', 'https://emularity-bios.ux-b.archive.org/apple2e.zip');
+      bios.setAttribute('path', '/apple2e.zip');
+      bios.setAttribute('label', 'Apple IIe BIOS');
+      emu.appendChild(bios);
+      let software = document.createElement('emularity-file');
+      software.setAttribute('url', url);
+      software.setAttribute('path', path);
+      software.setAttribute('label', item.title);
+      emu.appendChild(software);
+    } else {
+      alert('Unknown platform: ' + item.platform);
+      return;
+    }
+    // Persist each title's writes (saves, high scores, NVRAM) under its own store,
+    // so titles sharing a mountpoint can't contaminate each other
+    emu.setAttribute('persist', 'collection-' + item.id);
+
+    let keyboard = document.createElement('emularity-keyboard');
+    keyboard.setAttribute('layout', 'pc101');
+    emu.appendChild(keyboard);
+
+    // Swap the library UI out for the player. Emscripten runtimes don't tear down
+    // cleanly, so "back" is a page reload.
+    let bar = document.createElement('div');
+    bar.className = 'player-bar';
+    bar.innerHTML = '<button>◀ Back to collection</button><span class="player-title"></span>';
+    bar.querySelector('.player-title').textContent = item.title;
+    bar.querySelector('button').addEventListener('click', () => location.reload());
+
+    this.innerHTML = '';
+    this.appendChild(bar);
+    this.appendChild(emu);
+  }
+
+  /* ===== Add-software dialog ===== */
+
+  buildDialog() {
+    let dialog = document.createElement('dialog');
+    dialog.innerHTML = `
+      <button class="close-dialog" title="Close">✕</button>
+      <h3>Add software</h3>
+      <div class="add-tabs">
+        <button data-tab="search" class="active">Search archive.org</button>
+        <button data-tab="url">From URL</button>
+        <button data-tab="upload">Upload</button>
+      </div>
+
+      <div class="tab-panel" data-panel="search">
+        <div class="search-row">
+          <span class="search-filter" title="Results are filtered to software for this platform"></span>
+          <input type="search" name="query" placeholder="Search titles...">
+        </div>
+        <p class="field-hint">Results from archive.org's software library. Click one to add it to your collection.</p>
+        <div class="search-results"></div>
+      </div>
+
+      <div class="tab-panel" data-panel="url" style="display: none">
+        <label>Title <input type="text" name="title"></label>
+        <label>URL <input type="url" name="url" placeholder="https://example.com/game.zip"></label>
+        <p class="field-hint url-hint"></p>
+        <label class="exe-field">Program to run <input type="text" name="exe" placeholder="GAMEDIR/GAME.EXE"></label>
+        <button class="primary add-url">Add to collection</button>
+      </div>
+
+      <div class="tab-panel" data-panel="upload" style="display: none">
+        <label>Title <input type="text" name="uploadtitle"></label>
+        <label>File <input type="file" name="file"></label>
+        <p class="field-hint upload-hint"></p>
+        <label class="exe-field">Program to run <input type="text" name="uploadexe" placeholder="GAMEDIR/GAME.EXE"></label>
+        <button class="primary add-upload">Add to collection</button>
+      </div>
+      <p class="error-note"></p>
+    `;
+    this.appendChild(dialog);
+    this.dialog = dialog;
+
+    dialog.querySelector('.close-dialog').addEventListener('click', () => dialog.close());
+    dialog.querySelectorAll('.add-tabs button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        dialog.querySelectorAll('.add-tabs button').forEach(b => b.classList.toggle('active', b == btn));
+        dialog.querySelectorAll('.tab-panel').forEach(p => {
+          p.style.display = (p.dataset.panel == btn.dataset.tab) ? '' : 'none';
+        });
+      });
+    });
+
+    let query = dialog.querySelector('[name="query"]');
+    // Debounce as-you-type searches so we don't hit archive.org on every keystroke
+    query.addEventListener('input', () => {
+      clearTimeout(this.searchtimer);
+      this.searchtimer = setTimeout(() => this.runSearch(), 500);
+    });
+    query.addEventListener('keydown', ev => {
+      if (ev.key == 'Enter') {
+        clearTimeout(this.searchtimer);
+        this.runSearch();
+      }
+    });
+    // Infinite scroll: fetch the next page as the list nears the bottom
+    dialog.querySelector('.search-results').addEventListener('scroll', ev => {
+      let el = ev.target;
+      if (el.scrollTop + el.clientHeight >= el.scrollHeight - 150) this.loadMoreResults();
+    });
+    dialog.querySelector('.add-url').addEventListener('click', () => this.addFromURL());
+    dialog.querySelector('.add-upload').addEventListener('click', () => this.addFromUpload());
+  }
+  openDialog() {
+    let platform = PLATFORMS[this.platform];
+    this.dialog.querySelector('[name="query"]').value = '';
+    this.dialog.querySelector('.search-filter').textContent = platform.query;
+    this.dialog.querySelector('.search-results').innerHTML = '';
+    this.dialog.querySelector('.error-note').textContent = '';
+    this.dialog.querySelector('.url-hint').textContent = platform.urlHint;
+    this.dialog.querySelector('.upload-hint').textContent = platform.urlHint;
+    this.dialog.querySelector('[name="file"]').accept = platform.accept;
+    this.dialog.querySelectorAll('.exe-field').forEach(el => {
+      el.style.display = platform.exeField ? '' : 'none';
+    });
+    this.dialog.showModal();
+    this.dialog.querySelector('[name="query"]').focus();
+    this.runSearch(); // pre-populate with this platform's most popular software
+  }
+  setError(msg) {
+    this.dialog.querySelector('.error-note').textContent = msg || '';
+  }
+  appendResults(docs) {
+    let results = this.dialog.querySelector('.search-results');
+    docs.forEach(doc => {
+      let row = document.createElement('div');
+      row.className = 'search-result';
+      row.innerHTML = '<img loading="lazy"><div><div class="result-title"></div><div class="result-detail"></div></div>';
+      row.querySelector('img').src = 'https://archive.org/services/img/' + doc.identifier;
+      row.querySelector('.result-title').textContent = Array.isArray(doc.title) ? doc.title[0] : (doc.title || doc.identifier);
+      row.querySelector('.result-detail').textContent = doc.identifier + (doc.year ? ' · ' + doc.year : '');
+      row.addEventListener('click', () => this.addFromArchive(doc.identifier, row));
+      results.appendChild(row);
+    });
+  }
+  async runSearch() {
+    let results = this.dialog.querySelector('.search-results');
+    let text = this.dialog.querySelector('[name="query"]').value.trim();
+    let query = PLATFORMS[this.platform].query + (text ? ' ' + text : '');
+    let seq = this.searchseq = (this.searchseq || 0) + 1;
+    this.searchState = { seq, query, page: 1, total: Infinity, loading: true };
+    if (!results.children.length) results.innerHTML = '<p class="field-hint">Searching...</p>';
+    results.classList.add('loading');
+    this.setError('');
+    try {
+      let { docs, total } = await searchArchive(query, 1);
+      if (seq != this.searchseq) return; // a newer search superseded this one
+      results.classList.remove('loading');
+      results.innerHTML = '';
+      this.searchState.total = total;
+      this.searchState.loading = false;
+      if (!docs.length) { results.innerHTML = '<p class="field-hint">No results.</p>'; return; }
+      this.appendResults(docs);
+      results.scrollTop = 0;
+    } catch (e) {
+      if (seq != this.searchseq) return;
+      console.error(e);
+      results.classList.remove('loading');
+      results.innerHTML = '';
+      this.setError('Search failed: ' + e.message);
+    }
+  }
+  async loadMoreResults() {
+    let st = this.searchState;
+    if (!st || st.loading) return;
+    let results = this.dialog.querySelector('.search-results');
+    if (results.querySelectorAll('.search-result').length >= st.total) return; // all loaded
+    st.loading = true;
+    let seq = st.seq, nextPage = st.page + 1;
+    let loader = document.createElement('div');
+    loader.className = 'search-more';
+    loader.textContent = 'Loading more...';
+    results.appendChild(loader);
+    try {
+      let { docs } = await searchArchive(st.query, nextPage);
+      loader.remove();
+      if (seq != this.searchseq) return; // superseded by a newer search
+      st.page = nextPage;
+      st.loading = false;
+      this.appendResults(docs);
+    } catch (e) {
+      loader.remove();
+      if (seq != this.searchseq) return;
+      st.loading = false;
+      console.error(e);
+    }
+  }
+  async addFromArchive(identifier, row) {
+    this.setError('');
+    row.style.opacity = .5;
+    try {
+      let resolved = await resolveArchiveItem(identifier);
+      this.add({
+        title: resolved.title,
+        source: 'url',
+        url: resolved.url,
+        filename: resolved.filename,
+        exe: resolved.exe,
+      });
+      this.dialog.close();
+    } catch (e) {
+      console.error(e);
+      this.setError(`Couldn't add ${identifier}: ${e.message}`);
+    } finally {
+      row.style.opacity = '';
+    }
+  }
+  addFromURL() {
+    let url = this.dialog.querySelector('[name="url"]').value.trim();
+    let title = this.dialog.querySelector('[name="title"]').value.trim();
+    if (!url) return this.setError('A URL is required.');
+    let filename = url.split('?')[0].split('/').pop() || 'software';
+    this.add({
+      title: title || filename,
+      source: 'url',
+      url: url,
+      filename: filename,
+      exe: this.dialog.querySelector('[name="exe"]').value.trim(),
+    });
+    this.dialog.close();
+  }
+  async addFromUpload() {
+    let input = this.dialog.querySelector('[name="file"]');
+    let title = this.dialog.querySelector('[name="uploadtitle"]').value.trim();
+    if (!input.files.length) return this.setError('Choose a file to upload.');
+    let file = input.files[0];
+    let item = this.add({
+      title: title || file.name,
+      source: 'upload',
+      filename: file.name,
+      exe: this.dialog.querySelector('[name="uploadexe"]').value.trim(),
+    });
+    try {
+      await filedb.put(item.id, file);
+      this.dialog.close();
+    } catch (e) {
+      console.error(e);
+      this.items = this.items.filter(i => i != item);
+      this.save();
+      this.renderGrid();
+      this.setError('Failed to store the file in browser storage: ' + e.message);
+    }
+  }
+}
+customElements.define('emularity-collection', EmularityCollection);
+    </script>
+  </body>
+</html>
