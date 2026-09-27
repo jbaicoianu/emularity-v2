@@ -22,6 +22,7 @@ export class BaseEmulator extends BaseClass {
   splashresolution = '800x600'
   sound = true
   autostart = true
+  persist = false
   canvas = null
   files = {}
   oncreate = null
@@ -67,6 +68,7 @@ export class BaseEmulator extends BaseClass {
 
     if (this.settings['sound'] == 'false' || this.settings['sound'] == '0') this.settings['sound'] = false;
     if (this.settings['autostart'] == 'false' || this.settings['autostart'] == '0') this.settings['autostart'] = false;
+    if (this.settings['persist'] == 'false' || this.settings['persist'] == '0') this.settings['persist'] = false;
 
     this.setSettings(this.settings);
   }
@@ -204,6 +206,14 @@ export class BaseEmulator extends BaseClass {
     };
     if (this.wasmfileloader && this.wasmfileloader.data) {
       module.wasmBinary = this.wasmfileloader.data;
+      // Newer Emscripten builds no longer read an incoming wasmBinary by default,
+      // but they all honor instantiateWasm - feed them the prefetched binary
+      module.instantiateWasm = (imports, done) => {
+        WebAssembly.instantiate(module.wasmBinary, imports)
+          .then(out => done(out.instance, out.module))
+          .catch(e => console.error('Emularity: wasm instantiation failed', e));
+        return {};
+      };
     }
     return module;
   }
@@ -410,37 +420,34 @@ export class BaseEmulator extends BaseClass {
     this.setStatus('Initializing filesystem...');
 
     // initialize BrowserFS filesystem
+    // All writes go to a delta layer: an in-memory filesystem (the running emulator
+    // needs synchronous access), optionally mirrored to IndexedDB when this machine
+    // has a `persist` store name so writes survive across visits. Any storage
+    // failure falls back to memory-only rather than blocking the boot.
     let inMemoryFS = new BrowserFS.FileSystem.InMemory();
     let deltaFS = inMemoryFS;
-    if (false) { // FIXME - IndexedDB is causing issues with filesystem remnants preventing zips from mounting, just use inMemoryFS for now
-      await new Promise((resolve, reject) => {
-        // If the browser supports IndexedDB storage, mirror writes to that storage for persistence purposes.
-        if (BrowserFS.FileSystem.IndexedDB.isAvailable()) {
-          // Read-only inMemoryFS with an IndexedDB-backed write layer overlay
-          deltaFS = new BrowserFS.FileSystem.AsyncMirror(
-                      inMemoryFS,
-                      new BrowserFS.FileSystem.IndexedDB(function(e, fs) {
-                        if (e) {
-                          // we probably weren't given access;
-                          // private window for example.
-                          // don't fail completely, just don't
-                          // use indexeddb
-                          deltaFS = inMemoryFS;
-                          resolve();
-                        } else {
-                          // Initialize deltaFS by copying files from async storage to sync storage.
-                          deltaFS.initialize(function (e) {
-                                               if (e) {
-                                                 reject(e);
-                                               } else {
-                                                 resolve()
-                                               }
-                                             });
-                        }
-                      },
-                      this.systemname)
-                    );
-        }
+    if (this.persist && BrowserFS.FileSystem.IndexedDB.isAvailable()) {
+      deltaFS = await new Promise(resolve => {
+        let mirror = new BrowserFS.FileSystem.AsyncMirror(
+          inMemoryFS,
+          new BrowserFS.FileSystem.IndexedDB(e => {
+            if (e) {
+              // We probably weren't given access; private window for example
+              console.warn('Emularity: IndexedDB unavailable, writes will not persist', e);
+              resolve(inMemoryFS);
+            } else {
+              // Copy previously-persisted writes from IndexedDB into the sync layer
+              mirror.initialize(err => {
+                if (err) {
+                  console.warn('Emularity: failed to load persisted files, writes will not persist', err);
+                  resolve(inMemoryFS);
+                } else {
+                  resolve(mirror);
+                }
+              });
+            }
+          }, this.persist)
+        );
       });
     }
 
@@ -484,11 +491,9 @@ export class BaseEmulator extends BaseClass {
     files.forEach(f => {
       if (f.mountpoint) {
         if (f.data) {
-          if (bfs.existsSync(f.mountpoint)) {
-            // If a directory already exists at the path we're trying to mount this drive, remove it
-            // otherwise the running system will be unable to load files
-            bfs.rmdirSync(f.mountpoint);
-          }
+          // Persisted writes from earlier sessions may shadow this mountpoint in the
+          // writable layer; OverlayFS merges them over the zip mounted on the readable
+          // layer, so they must be left in place.
           let zfs = new BrowserFS.FileSystem.ZipFS(new Buffer(f.data));
           bfs.getOverlayedFileSystems().readable.mount(f.mountpoint, zfs);
         } else {
