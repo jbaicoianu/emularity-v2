@@ -34,23 +34,34 @@ export class VirtualFile extends BaseClass {
         let res = await fetch(this.url);
         let contentLength = res.headers.get('Content-Length');
 
-        if (contentLength) {
-          //this.data = await res.arrayBuffer();
+        if (res.body && res.body.getReader) {
+          // Accumulate chunks and size the final buffer from the bytes we actually
+          // receive. Content-Length can't be used to pre-size the buffer: when the
+          // server sends the response compressed (Content-Encoding: gzip/br, as
+          // GitHub Pages and many CDNs do), the header is the compressed size while
+          // the stream yields the larger decompressed body.
           let reader = res.body.getReader();
-          let databuffer = new ArrayBuffer(contentLength),
-              data = new Uint8Array(databuffer);
+          let total = contentLength ? +contentLength : 0;
+          let chunks = [];
           let loaded = 0;
           while (true) {
             let {done, value} = await reader.read();
-            this.dispatchEvent(new CustomEvent('progress', { detail: { complete: loaded, total: contentLength } }));
             if (done) break;
-            data.set(value, loaded);
+            chunks.push(value);
             loaded += value.byteLength;
+            // Once we pass the reported size (compression), report loaded as the total
+            this.dispatchEvent(new CustomEvent('progress', { detail: { complete: loaded, total: total >= loaded ? total : loaded } }));
+          }
+          let data = new Uint8Array(loaded);
+          let offset = 0;
+          for (let chunk of chunks) {
+            data.set(chunk, offset);
+            offset += chunk.byteLength;
           }
           this.dispatchEvent(new CustomEvent('complete'));
           this.data = data;
         } else {
-          this.data = await res.arrayBuffer();
+          this.data = new Uint8Array(await res.arrayBuffer());
         }
       } catch (e) {
         console.error(e);
