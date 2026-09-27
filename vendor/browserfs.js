@@ -2354,6 +2354,16 @@ return /******/ (function(modules) { // webpackBootstrap
 	    this.ERRNO_CODES = _ERRNO_CODES;
 	    this.node_ops = new BFSEmscriptenNodeOps(this);
 	    this.stream_ops = new BFSEmscriptenStreamOps(this);
+	    // Emularity patch: newer Emscripten FS implementations call node/stream ops
+	    // detached from their object (e.g. `var setattr = node.node_ops.setattr;
+	    // setattr(node, attr)`), which loses `this`. Bind every op to its instance.
+	    [this.node_ops, this.stream_ops].forEach(function (ops) {
+	        for (var k in ops) {
+	            if (typeof ops[k] === 'function') {
+	                ops[k] = ops[k].bind(ops);
+	            }
+	        }
+	    });
 	};
 	BFSEmscriptenFS.prototype.mount = function mount (m) {
 	    return this.createNode(null, '/', this.getMode(m.opts.root), 0);
