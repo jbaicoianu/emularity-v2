@@ -26,7 +26,6 @@ export class DOSBoxEmulator extends BaseEmulator {
   getArguments() {
     let args = this.arguments.length > 0 ? this.arguments.split(' ') : [];
     args.push('-conf', this.emulatorroot + '/dosbox.conf');
-    args.push('-c', '"config -writeconf blah.ini"');
     return args;
   }
   getConfig() {
@@ -54,7 +53,7 @@ export class DOSBoxEmulator extends BaseEmulator {
       [cpu]
       cputype=auto
       core = simple
-      cycles = fixed 30000
+      cycles = auto
       use dynamic core with paging on = false
 
       [dos]
