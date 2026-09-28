@@ -8,6 +8,32 @@
   margin: 0 auto;
   display: block;
   order: 1;
+  /* Nearest-neighbor scaling so upscaled low-res emulator output stays crisp
+     instead of blurring with bilinear interpolation. */
+  image-rendering: -moz-crisp-edges;
+  image-rendering: pixelated;
+}
+/* When the canvas goes fullscreen (e.g. Alt+Enter in DOSBox), fill the screen
+   and scale the emulator output to fit while preserving its aspect ratio,
+   rather than staying capped at max-width on a black backdrop.
+   !important is required because emscripten's SDL fullscreen handler sets an
+   inline width/height on the canvas (e.g. 800px x 600px), and inline styles
+   would otherwise win over these rules and leave the canvas un-scaled. */
+.emularity-emulator canvas:fullscreen {
+  width: 100% !important;
+  height: 100% !important;
+  max-width: none !important;
+  margin: 0;
+  object-fit: contain;
+  background: #000;
+}
+.emularity-emulator canvas:-webkit-full-screen {
+  width: 100% !important;
+  height: 100% !important;
+  max-width: none !important;
+  margin: 0;
+  object-fit: contain;
+  background: #000;
 }
 emularity-file {
   display: none;

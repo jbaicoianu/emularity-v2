@@ -227,6 +227,24 @@ export class BaseEmulator extends BaseClass {
         canvas.width = res.x;
         canvas.height = res.y;
         this.canvas = canvas;
+        // Handle Alt+Enter fullscreen ourselves, on window in the capture phase so
+        // we run before the emulator's SDL keyboard handler. SDL's emscripten
+        // fullscreen resizes the canvas backing to the screen and some emulators
+        // (DOSBox) then draw at native size into that large buffer, leaving the game
+        // tiny and centered. Requesting fullscreen on the canvas ourselves keeps the
+        // backing at the emulator's render resolution, so the CSS :fullscreen rule
+        // scales it up to fill the screen.
+        window.addEventListener('keydown', ev => {
+          if (ev.altKey && (ev.key == 'Enter' || ev.code == 'Enter') && this.running) {
+            ev.preventDefault();
+            ev.stopImmediatePropagation();
+            if (document.fullscreenElement == canvas) {
+              document.exitFullscreen();
+            } else if (canvas.requestFullscreen) {
+              canvas.requestFullscreen().catch(e => console.warn('Emularity: fullscreen request failed', e));
+            }
+          }
+        }, true);
       } else {
         // TODO - do something with OffscreenCanvas here, eg, pass a canvas from the main thread
       }

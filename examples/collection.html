@@ -62,21 +62,112 @@
         color: #49c8d7;
         background: #0c1c1f;
       }
+      .sort-bar {
+        display: flex;
+        justify-content: flex-end;
+        margin-top: 1em;
+        font-size: .85em;
+        color: #999;
+      }
+      .sort-bar select {
+        margin-left: .4em;
+        background: #111;
+        color: #ddd;
+        border: 1px solid #333;
+        border-radius: 6px;
+        padding: .3em .5em;
+        font-size: 1em;
+        cursor: pointer;
+      }
       .game-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
         gap: .75em;
         margin: 1em 0;
       }
       .game-card {
         position: relative;
+        display: flex;
+        align-items: center;
+        gap: 1em;
         background: #111;
         border: 1px solid #333;
         border-radius: 8px;
-        padding: 1em;
+        padding: .6em;
         cursor: pointer;
-        min-height: 4.5em;
+        min-height: 5.5em;
         box-sizing: border-box;
+      }
+      .game-card .game-thumb {
+        width: 80px;
+        height: 80px;
+        object-fit: cover;
+        border-radius: 4px;
+        background: #222;
+        flex-shrink: 0;
+      }
+      .game-card .game-info {
+        flex: 1;
+        min-width: 0;
+        padding-right: 1.5em;
+      }
+      .game-card .game-lastplayed {
+        display: block;
+        font-size: .78em;
+        color: #667;
+        margin-top: .4em;
+      }
+      .game-card .game-menu {
+        position: absolute;
+        top: .3em;
+        right: .4em;
+        width: 1.6em;
+        height: 1.6em;
+        line-height: 1;
+        color: #888;
+        background: none;
+        border: none;
+        border-radius: 4px;
+        font-size: 1.1em;
+        cursor: pointer;
+      }
+      .game-card .game-menu:hover {
+        color: #ddd;
+        background: #222;
+      }
+      .game-card .game-menu-popup {
+        display: none;
+        position: absolute;
+        top: 2em;
+        right: .4em;
+        z-index: 5;
+        background: #1a1a1a;
+        border: 1px solid #444;
+        border-radius: 6px;
+        padding: .25em;
+        box-shadow: 0 4px 12px rgba(0,0,0,.5);
+        min-width: 12em;
+      }
+      .game-card .game-menu-popup.open {
+        display: block;
+      }
+      .game-card .game-menu-popup button {
+        display: block;
+        width: 100%;
+        text-align: left;
+        background: none;
+        border: none;
+        color: #ddd;
+        padding: .5em .6em;
+        border-radius: 4px;
+        font-size: .85em;
+        cursor: pointer;
+      }
+      .game-card .game-menu-popup button:hover {
+        background: #262c2d;
+      }
+      .game-card .game-menu-popup .menu-delete:hover {
+        color: #f66;
       }
       .game-card:hover {
         border-color: #49c8d7;
@@ -87,7 +178,9 @@
         font-weight: bold;
         color: #fff;
         margin-bottom: .35em;
-        padding-right: 1.25em;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
       }
       .game-card .game-detail {
         display: block;
@@ -96,27 +189,6 @@
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
-      }
-      .game-card .game-delete, .game-card .game-reset {
-        position: absolute;
-        top: .4em;
-        color: #666;
-        background: none;
-        border: none;
-        font-size: 1em;
-        cursor: pointer;
-      }
-      .game-card .game-delete {
-        right: .5em;
-      }
-      .game-card .game-delete:hover {
-        color: #f66;
-      }
-      .game-card .game-reset {
-        right: 2em;
-      }
-      .game-card .game-reset:hover {
-        color: #fc6;
       }
       .game-card.add-card {
         border-style: dashed;
@@ -333,6 +405,14 @@ const PLATFORMS = {
   },
 };
 
+/* Sort options for the installed-software grid */
+const SORTS = {
+  'added-desc':  { label: 'Recently added', cmp: (a, b) => (b.added || 0) - (a.added || 0) },
+  'played-desc': { label: 'Last played',    cmp: (a, b) => (b.lastPlayed || 0) - (a.lastPlayed || 0) },
+  'title-asc':   { label: 'Title (A–Z)', cmp: (a, b) => (a.title || '').localeCompare(b.title || '') },
+  'rating-desc': { label: 'Rating',         cmp: (a, b) => (b.rating || 0) - (a.rating || 0) },
+};
+
 /* Tiny promise wrapper around IndexedDB, used to persist uploaded software */
 const filedb = {
   open() {
@@ -377,7 +457,7 @@ const SEARCH_ROWS = 50;
 async function searchArchive(query, page = 1, rows = SEARCH_ROWS) {
   let params = new URLSearchParams();
   params.append('q', query);
-  ['identifier', 'title', 'year'].forEach(f => params.append('fl[]', f));
+  ['identifier', 'title', 'year', 'avg_rating'].forEach(f => params.append('fl[]', f));
   params.append('sort[]', 'downloads desc');
   params.append('rows', String(rows));
   params.append('page', String(page));
@@ -385,6 +465,38 @@ async function searchArchive(query, page = 1, rows = SEARCH_ROWS) {
   let res = await fetch('https://archive.org/advancedsearch.php?' + params);
   let data = await res.json();
   return { docs: data.response.docs, total: data.response.numFound };
+}
+
+/* Recover the archive.org identifier from a stored item's download URL */
+function archiveIdFromUrl(url) {
+  if (!url) return null;
+  let m = url.match(/cors\.archive\.org\/cors\/([^\/?#]+)/);
+  return m ? decodeURIComponent(m[1]) : null;
+}
+
+/* Human-friendly "time ago" for a timestamp (ms), or "never" if unset */
+function relativeTime(ts) {
+  if (!ts) return 'never';
+  let sec = Math.max(0, Math.round((Date.now() - ts) / 1000));
+  let fmt = (n, u) => n + ' ' + u + (n == 1 ? '' : 's') + ' ago';
+  if (sec < 45) return 'just now';
+  let min = Math.round(sec / 60);
+  if (min < 60) return fmt(min, 'minute');
+  let hr = Math.round(min / 60);
+  if (hr < 24) return fmt(hr, 'hour');
+  let day = Math.round(hr / 24);
+  if (day < 7) return fmt(day, 'day');
+  if (day < 70) return fmt(Math.round(day / 7), 'week');
+  let mo = Math.round(day / 30.44);
+  if (mo < 12) return fmt(mo, 'month');
+  return fmt(Math.round(day / 365.25), 'year');
+}
+
+/* The archive.org thumbnail URL for a collection item, if it came from archive.org */
+function itemThumb(item) {
+  if (item.thumb) return item.thumb;
+  let id = item.identifier || archiveIdFromUrl(item.url);
+  return id ? 'https://archive.org/services/img/' + id : null;
 }
 
 /* Given an archive.org identifier, figure out the software file to load and how to start it */
@@ -422,11 +534,98 @@ class EmularityCollection extends HTMLElement {
     try { stored = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; } catch (e) {}
     this.items = stored.items || [];
     this.platform = PLATFORMS[stored.platform] ? stored.platform : Object.keys(PLATFORMS)[0];
-    this.render();
+    this.sort = SORTS[stored.sort] ? stored.sort : 'added-desc';
+    this.playing = false;
+    // Fill in derived/looked-up fields (thumbnail, added date, rating) for items
+    // saved before those existed, then keep enriching in the background.
+    this.backfillItems();
+    // Close any open card menu when clicking elsewhere
+    document.addEventListener('click', () => this.closeMenus());
+    // Drive platform/game selection from the URL hash so views are bookmarkable
+    // and the browser Back button behaves as users expect.
+    window.addEventListener('hashchange', () => this.renderRoute());
+    if (!location.hash) history.replaceState(null, '', '#' + this.platform);
+    this.renderRoute();
+    this.fetchMissingRatings();
+  }
+  // Derive thumbnail and added-date for older items from what we already have.
+  backfillItems() {
+    let changed = false;
+    for (let item of this.items) {
+      if (!item.thumb) {
+        let id = item.identifier || archiveIdFromUrl(item.url);
+        if (id) { item.identifier = item.identifier || id; item.thumb = 'https://archive.org/services/img/' + id; changed = true; }
+      }
+      if (!item.added) {
+        // item ids look like "sw-<timestamp>-<n>"; recover the creation time
+        let m = /^sw-(\d+)-/.exec(item.id || '');
+        item.added = m ? +m[1] : 0;
+        changed = true;
+      }
+    }
+    if (changed) this.save();
+  }
+  // Look up archive.org ratings for archive-sourced items that don't have one yet.
+  // avg_rating is only exposed by the advancedsearch API, so batch-query all the
+  // missing identifiers at once (client-side, same API as search).
+  async fetchMissingRatings() {
+    let pending = this.items.filter(i => i.rating === undefined)
+      .map(i => ({ item: i, id: i.identifier || archiveIdFromUrl(i.url) }))
+      .filter(p => p.id);
+    if (!pending.length) return;
+    try {
+      let q = 'identifier:(' + pending.map(p => p.id).join(' OR ') + ')';
+      let params = new URLSearchParams();
+      params.append('q', q);
+      ['identifier', 'avg_rating'].forEach(f => params.append('fl[]', f));
+      params.append('rows', String(pending.length));
+      params.append('output', 'json');
+      let res = await fetch('https://archive.org/advancedsearch.php?' + params);
+      let ratings = {};
+      (await res.json()).response.docs.forEach(d => { ratings[d.identifier] = d.avg_rating != null ? +d.avg_rating : 0; });
+      pending.forEach(p => { p.item.rating = ratings[p.id] != null ? ratings[p.id] : 0; });
+    } catch (e) {
+      console.error('Failed to fetch ratings', e);
+      pending.forEach(p => { p.item.rating = 0; }); // don't retry endlessly
+    }
+    this.save();
+    if (!this.playing) this.renderGrid();
+  }
+  // Routes: #<platform> shows that platform's library; #play/<itemId> plays a game.
+  renderRoute() {
+    let hash = decodeURIComponent(location.hash.replace(/^#/, ''));
+    let slash = hash.indexOf('/');
+    let head = slash >= 0 ? hash.slice(0, slash) : hash;
+    let rest = slash >= 0 ? hash.slice(slash + 1) : '';
+
+    if (head == 'play' && rest) {
+      let item = this.items.find(i => i.id == rest);
+      if (item) {
+        if (this.playing) return; // a player is already showing
+        this.platform = item.platform;
+        this.playing = true;
+        this.play(item);
+        return;
+      }
+      // unknown game id falls through to the library below
+    }
+
+    // Library route. Leaving a running emulator requires a reload (emscripten
+    // runtimes don't tear down cleanly); the hash is already updated, so we just
+    // reload and re-render the library from scratch.
+    if (this.playing) { location.reload(); return; }
+    if (PLATFORMS[head]) this.platform = head;
+    if (this.querySelector('.platform-tabs')) {
+      this.renderTabs();
+      this.renderGrid();
+    } else {
+      this.render();
+    }
+    this.save();
   }
   save() {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ platform: this.platform, items: this.items }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ platform: this.platform, sort: this.sort, items: this.items }));
     } catch (e) {
       console.error('Failed to save collection', e);
     }
@@ -438,12 +637,15 @@ class EmularityCollection extends HTMLElement {
         <p>Your personal software collection. Pick a platform, add software, click to play.</p>
       </header>
       <div class="platform-tabs"></div>
+      <div class="sort-bar"></div>
       <div class="game-grid"></div>
       <p class="empty-note" style="display: none">No software installed for this platform yet. Click "Add software" to get started.</p>
     `;
     this.renderTabs();
+    this.renderSortBar();
     this.renderGrid();
     this.buildDialog();
+    this.buildEditDialog();
   }
   renderTabs() {
     let tabs = this.querySelector('.platform-tabs');
@@ -454,34 +656,68 @@ class EmularityCollection extends HTMLElement {
       btn.querySelector('.label').textContent = PLATFORMS[key].label;
       btn.querySelector('.sublabel').textContent = PLATFORMS[key].sublabel;
       if (key == this.platform) btn.classList.add('active');
-      btn.addEventListener('click', () => {
-        this.platform = key;
-        this.save();
-        this.renderTabs();
-        this.renderGrid();
-      });
+      btn.addEventListener('click', () => { location.hash = key; });
       tabs.appendChild(btn);
     }
   }
+  renderSortBar() {
+    let bar = this.querySelector('.sort-bar');
+    bar.innerHTML = '<label>Sort by <select class="sort-select"></select></label>';
+    let sel = bar.querySelector('.sort-select');
+    for (let key in SORTS) {
+      let opt = document.createElement('option');
+      opt.value = key;
+      opt.textContent = SORTS[key].label;
+      if (key == this.sort) opt.selected = true;
+      sel.appendChild(opt);
+    }
+    sel.addEventListener('change', () => {
+      this.sort = sel.value;
+      this.save();
+      this.renderGrid();
+    });
+  }
   renderGrid() {
+    if (this.querySelector('.sort-bar')) this.renderSortBar();
     let grid = this.querySelector('.game-grid');
     grid.innerHTML = '';
     let items = this.items.filter(item => item.platform == this.platform);
+    items.sort((SORTS[this.sort] || SORTS['added-desc']).cmp);
     items.forEach(item => {
       let card = document.createElement('div');
       card.className = 'game-card';
-      card.innerHTML = '<span class="game-title"></span><span class="game-detail"></span><button class="game-reset" title="Reset saved data">⟲</button><button class="game-delete" title="Remove from collection">✕</button>';
+      card.innerHTML = `
+        <img class="game-thumb" loading="lazy">
+        <div class="game-info">
+          <span class="game-title"></span>
+          <span class="game-detail"></span>
+          <span class="game-lastplayed"></span>
+        </div>
+        <button class="game-menu" title="More options">⋮</button>
+        <div class="game-menu-popup">
+          <button class="menu-edit">✎ Edit info</button>
+          <button class="menu-reset">⟲ Reset saved data</button>
+          <button class="menu-delete">✕ Remove from collection</button>
+        </div>`;
+      let thumb = itemThumb(item), img = card.querySelector('.game-thumb');
+      if (thumb) { img.src = thumb; img.addEventListener('error', () => img.remove()); }
+      else img.remove();
       card.querySelector('.game-title').textContent = item.title;
       card.querySelector('.game-detail').textContent = item.source == 'upload' ? item.filename + ' (uploaded)' : item.filename;
-      card.addEventListener('click', () => this.play(item));
-      card.querySelector('.game-delete').addEventListener('click', ev => {
+      card.querySelector('.game-lastplayed').textContent = item.lastPlayed ? 'Played ' + relativeTime(item.lastPlayed) : 'Never played';
+      card.addEventListener('click', () => { location.hash = 'play/' + item.id; });
+
+      let popup = card.querySelector('.game-menu-popup');
+      card.querySelector('.game-menu').addEventListener('click', ev => {
         ev.stopPropagation();
-        this.remove(item);
+        let wasOpen = popup.classList.contains('open');
+        this.closeMenus();
+        if (!wasOpen) popup.classList.add('open');
       });
-      card.querySelector('.game-reset').addEventListener('click', ev => {
-        ev.stopPropagation();
-        this.resetSaves(item);
-      });
+      popup.addEventListener('click', ev => ev.stopPropagation());
+      card.querySelector('.menu-edit').addEventListener('click', () => { this.closeMenus(); this.editItem(item); });
+      card.querySelector('.menu-reset').addEventListener('click', () => { this.closeMenus(); this.resetSaves(item); });
+      card.querySelector('.menu-delete').addEventListener('click', () => { this.closeMenus(); this.remove(item); });
       grid.appendChild(card);
     });
 
@@ -492,10 +728,54 @@ class EmularityCollection extends HTMLElement {
     grid.appendChild(addcard);
 
     this.querySelector('.empty-note').style.display = items.length ? 'none' : 'block';
+    this.querySelector('.sort-bar').style.display = items.length ? '' : 'none';
+  }
+  closeMenus() {
+    this.querySelectorAll('.game-menu-popup.open').forEach(p => p.classList.remove('open'));
+  }
+  buildEditDialog() {
+    let dialog = document.createElement('dialog');
+    dialog.className = 'edit-dialog';
+    dialog.innerHTML = `
+      <button class="close-dialog" title="Close">✕</button>
+      <h3>Edit software</h3>
+      <label>Title <input type="text" name="edit-title"></label>
+      <label class="edit-exe-field">Program to run <input type="text" name="edit-exe" placeholder="GAMEDIR/GAME.EXE"></label>
+      <label class="edit-url-field">URL <input type="url" name="edit-url"></label>
+      <label>Thumbnail URL <input type="url" name="edit-thumb" placeholder="https://archive.org/services/img/..."></label>
+      <button class="primary edit-save">Save changes</button>
+    `;
+    this.appendChild(dialog);
+    this.editDialog = dialog;
+    dialog.querySelector('.close-dialog').addEventListener('click', () => dialog.close());
+    dialog.querySelector('.edit-save').addEventListener('click', () => this.saveEdit());
+  }
+  editItem(item) {
+    this.editing = item;
+    let d = this.editDialog, platform = PLATFORMS[item.platform];
+    d.querySelector('[name="edit-title"]').value = item.title || '';
+    d.querySelector('[name="edit-exe"]').value = item.exe || '';
+    d.querySelector('[name="edit-url"]').value = item.url || '';
+    d.querySelector('[name="edit-thumb"]').value = item.thumb || '';
+    d.querySelector('.edit-exe-field').style.display = platform && platform.exeField ? '' : 'none';
+    d.querySelector('.edit-url-field').style.display = item.source == 'url' ? '' : 'none';
+    d.showModal();
+  }
+  saveEdit() {
+    let item = this.editing, d = this.editDialog;
+    if (!item) return;
+    item.title = d.querySelector('[name="edit-title"]').value.trim() || item.title;
+    item.exe = d.querySelector('[name="edit-exe"]').value.trim();
+    if (item.source == 'url') item.url = d.querySelector('[name="edit-url"]').value.trim() || item.url;
+    item.thumb = d.querySelector('[name="edit-thumb"]').value.trim() || undefined;
+    this.save();
+    this.renderGrid();
+    d.close();
   }
   add(item) {
     item.id = 'sw-' + Date.now() + '-' + this.items.length;
     item.platform = this.platform;
+    item.added = Date.now();
     this.items.push(item);
     this.save();
     this.renderGrid();
@@ -523,6 +803,8 @@ class EmularityCollection extends HTMLElement {
   /* ===== Playing ===== */
 
   async play(item) {
+    item.lastPlayed = Date.now();
+    this.save();
     let url = item.url;
     if (item.source == 'upload') {
       let blob = await filedb.get(item.id);
@@ -576,13 +858,13 @@ class EmularityCollection extends HTMLElement {
     keyboard.setAttribute('layout', 'pc101');
     emu.appendChild(keyboard);
 
-    // Swap the library UI out for the player. Emscripten runtimes don't tear down
-    // cleanly, so "back" is a page reload.
+    // Swap the library UI out for the player. "Back to collection" navigates history
+    // (same as the browser Back button), which returns to the library route.
     let bar = document.createElement('div');
     bar.className = 'player-bar';
     bar.innerHTML = '<button>◀ Back to collection</button><span class="player-title"></span>';
     bar.querySelector('.player-title').textContent = item.title;
-    bar.querySelector('button').addEventListener('click', () => location.reload());
+    bar.querySelector('button').addEventListener('click', () => history.back());
 
     this.innerHTML = '';
     this.appendChild(bar);
@@ -689,7 +971,7 @@ class EmularityCollection extends HTMLElement {
       row.querySelector('img').src = 'https://archive.org/services/img/' + doc.identifier;
       row.querySelector('.result-title').textContent = Array.isArray(doc.title) ? doc.title[0] : (doc.title || doc.identifier);
       row.querySelector('.result-detail').textContent = doc.identifier + (doc.year ? ' · ' + doc.year : '');
-      row.addEventListener('click', () => this.addFromArchive(doc.identifier, row));
+      row.addEventListener('click', () => this.addFromArchive(doc, row));
       results.appendChild(row);
     });
   }
@@ -745,7 +1027,8 @@ class EmularityCollection extends HTMLElement {
       console.error(e);
     }
   }
-  async addFromArchive(identifier, row) {
+  async addFromArchive(doc, row) {
+    let identifier = doc.identifier;
     this.setError('');
     row.style.opacity = .5;
     try {
@@ -756,6 +1039,9 @@ class EmularityCollection extends HTMLElement {
         url: resolved.url,
         filename: resolved.filename,
         exe: resolved.exe,
+        identifier: identifier,
+        thumb: 'https://archive.org/services/img/' + identifier,
+        rating: doc.avg_rating != null ? +doc.avg_rating : 0,
       });
       this.dialog.close();
     } catch (e) {
