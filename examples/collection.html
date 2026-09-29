@@ -117,6 +117,38 @@
         color: #667;
         margin-top: .4em;
       }
+      .game-card .game-storage {
+        display: block;
+        font-size: .75em;
+        color: #49c8d7;
+        margin-top: .25em;
+      }
+      .game-card .game-storage:empty {
+        display: none;
+      }
+      .game-card.busy .game-storage {
+        color: #49c8d7;
+      }
+      .game-card .game-progress {
+        display: none;
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: 4px;
+        background: #222;
+        border-radius: 0 0 8px 8px;
+        overflow: hidden;
+      }
+      .game-card.busy .game-progress {
+        display: block;
+      }
+      .game-card .game-progress-fill {
+        width: 0;
+        height: 100%;
+        background: #49c8d7;
+        transition: width .2s;
+      }
       .game-card .game-menu {
         position: absolute;
         top: .3em;
@@ -364,7 +396,7 @@
       .player-bar {
         position: sticky;
         top: 0;
-        z-index: 10;
+        z-index: 40; /* stay above the powered-off overlay so Back remains usable */
         display: flex;
         align-items: center;
         gap: 1em;
@@ -535,44 +567,131 @@ const audioMute = {
 };
 audioMute.install();
 
-/* Tiny promise wrapper around IndexedDB, used to persist uploaded software */
-const filedb = {
+/* Tiny promise wrapper around IndexedDB. Stores: 'files' (uploaded software),
+   'cache' (device-cache fallback when OPFS is unavailable), 'handles' (a saved
+   File System Access directory handle for "Clone to disk"). */
+const idb = {
   open() {
     if (this._db) return Promise.resolve(this._db);
     return new Promise((resolve, reject) => {
-      let req = indexedDB.open('emularity-collection', 1);
-      req.onupgradeneeded = ev => ev.target.result.createObjectStore('files');
+      let req = indexedDB.open('emularity-collection', 2);
+      req.onupgradeneeded = ev => {
+        let db = ev.target.result;
+        for (let s of ['files', 'cache', 'handles']) if (!db.objectStoreNames.contains(s)) db.createObjectStore(s);
+      };
       req.onsuccess = ev => { this._db = ev.target.result; resolve(this._db); };
-      req.onerror = ev => reject(req.error);
-    });
-  },
-  async put(id, blob) {
-    let db = await this.open();
-    return new Promise((resolve, reject) => {
-      let tx = db.transaction('files', 'readwrite');
-      tx.objectStore('files').put(blob, id);
-      tx.oncomplete = resolve;
-      tx.onerror = () => reject(tx.error);
-    });
-  },
-  async get(id) {
-    let db = await this.open();
-    return new Promise((resolve, reject) => {
-      let req = db.transaction('files').objectStore('files').get(id);
-      req.onsuccess = () => resolve(req.result);
       req.onerror = () => reject(req.error);
     });
   },
-  async delete(id) {
+  async put(store, key, val) {
     let db = await this.open();
-    return new Promise((resolve, reject) => {
-      let tx = db.transaction('files', 'readwrite');
-      tx.objectStore('files').delete(id);
-      tx.oncomplete = resolve;
-      tx.onerror = () => reject(tx.error);
-    });
+    return new Promise((res, rej) => { let tx = db.transaction(store, 'readwrite'); tx.objectStore(store).put(val, key); tx.oncomplete = res; tx.onerror = () => rej(tx.error); });
+  },
+  async get(store, key) {
+    let db = await this.open();
+    return new Promise((res, rej) => { let r = db.transaction(store).objectStore(store).get(key); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+  },
+  async delete(store, key) {
+    let db = await this.open();
+    return new Promise((res, rej) => { let tx = db.transaction(store, 'readwrite'); tx.objectStore(store).delete(key); tx.oncomplete = res; tx.onerror = () => rej(tx.error); });
   },
 };
+/* Thin wrapper for uploaded-software blobs (store 'files') */
+const filedb = {
+  put: (id, blob) => idb.put('files', id, blob),
+  get: (id) => idb.get('files', id),
+  delete: (id) => idb.delete('files', id),
+};
+
+/* Local storage backends for "Cache on device" (OPFS, IndexedDB fallback) and
+   "Clone to disk" (File System Access, a real user-chosen folder). */
+const localStore = {
+  supportsDisk() { return typeof window.showDirectoryPicker === 'function'; },
+  supportsOPFS() { return !!(navigator.storage && navigator.storage.getDirectory); },
+
+  async _opfsDir() {
+    let root = await navigator.storage.getDirectory();
+    return root.getDirectoryHandle('emularity-cache', { create: true });
+  },
+  // ---- device cache ----
+  async cachePut(id, blob) {
+    if (this.supportsOPFS()) {
+      let dir = await this._opfsDir(), fh = await dir.getFileHandle(id, { create: true }), w = await fh.createWritable();
+      await w.write(blob); await w.close();
+    } else {
+      await idb.put('cache', id, blob);
+    }
+  },
+  // stream a URL straight into the device cache (memory-efficient for big files)
+  async cacheStream(id, url, onProgress) {
+    if (this.supportsOPFS()) {
+      let dir = await this._opfsDir(), fh = await dir.getFileHandle(id, { create: true }), w = await fh.createWritable();
+      await streamInto(url, chunk => w.write(chunk), onProgress);
+      await w.close();
+    } else {
+      let blob = await fetchBlob(url, onProgress);
+      await idb.put('cache', id, blob);
+    }
+  },
+  async cacheGet(id) {
+    try {
+      if (this.supportsOPFS()) { let dir = await this._opfsDir(), fh = await dir.getFileHandle(id); return await fh.getFile(); }
+      return await idb.get('cache', id);
+    } catch (e) { return null; }
+  },
+  async cacheDelete(id) {
+    try { if (this.supportsOPFS()) { let dir = await this._opfsDir(); await dir.removeEntry(id); } else await idb.delete('cache', id); } catch (e) {}
+  },
+  // ---- disk clone (File System Access) ----
+  async pickDiskDir() {
+    let handle = await window.showDirectoryPicker({ mode: 'readwrite', id: 'emularity-games' });
+    await idb.put('handles', 'diskdir', handle);
+    return handle;
+  },
+  async getDiskDir(createOrPick) {
+    let handle = await idb.get('handles', 'diskdir');
+    if (!handle) return createOrPick ? await this.pickDiskDir() : null;
+    let perm = await handle.queryPermission({ mode: 'readwrite' });
+    if (perm !== 'granted') perm = await handle.requestPermission({ mode: 'readwrite' });
+    if (perm !== 'granted') return createOrPick ? await this.pickDiskDir() : null;
+    return handle;
+  },
+  async diskStream(name, url, onProgress) {
+    let dir = await this.getDiskDir(true), fh = await dir.getFileHandle(name, { create: true }), w = await fh.createWritable();
+    await streamInto(url, chunk => w.write(chunk), onProgress);
+    await w.close();
+  },
+  async diskPut(name, blob) {
+    let dir = await this.getDiskDir(true), fh = await dir.getFileHandle(name, { create: true }), w = await fh.createWritable();
+    await w.write(blob); await w.close();
+  },
+  async diskGet(name) {
+    try { let dir = await this.getDiskDir(false); if (!dir) return null; let fh = await dir.getFileHandle(name); return await fh.getFile(); } catch (e) { return null; }
+  },
+  async diskDelete(name) {
+    try { let dir = await this.getDiskDir(false); if (dir) await dir.removeEntry(name); } catch (e) {}
+  },
+};
+
+/* Fetch a URL, streaming chunks into `sink(chunk)`; reports (loaded,total) */
+async function streamInto(url, sink, onProgress) {
+  let res = await fetch(url);
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  let total = +res.headers.get('Content-Length') || 0, reader = res.body.getReader(), loaded = 0;
+  while (true) {
+    let { done, value } = await reader.read();
+    if (done) break;
+    await sink(value);
+    loaded += value.byteLength;
+    if (onProgress) onProgress(loaded, total);
+  }
+}
+/* Fetch a URL into a Blob with progress (used for the IndexedDB fallback) */
+async function fetchBlob(url, onProgress) {
+  let chunks = [];
+  await streamInto(url, c => chunks.push(c), onProgress);
+  return new Blob(chunks);
+}
 
 const SEARCH_ROWS = 50;
 
@@ -614,6 +733,15 @@ function relativeTime(ts) {
   return fmt(Math.round(day / 365.25), 'year');
 }
 
+/* Format a byte count as a human-friendly size (e.g. "4.2 MB") */
+function formatBytes(bytes) {
+  if (bytes == null || !isFinite(bytes) || bytes < 0) return null;
+  if (bytes < 1024) return bytes + ' B';
+  let units = ['KB', 'MB', 'GB', 'TB'], v = bytes / 1024, i = 0;
+  while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
+  return (v < 10 ? v.toFixed(1) : Math.round(v)) + ' ' + units[i];
+}
+
 /* Format an elapsed duration (ms) as M:SS, or H:MM:SS past an hour */
 function formatDuration(ms) {
   let s = Math.floor(Math.max(0, ms) / 1000);
@@ -643,6 +771,7 @@ async function resolveArchiveItem(identifier) {
     filename: file.name,
     url: `https://cors.archive.org/cors/${identifier}/${encodeURIComponent(file.name)}`,
     exe: meta.emulator_start || '',
+    size: file.size != null ? +file.size : undefined,
   };
 }
 
@@ -680,6 +809,7 @@ class EmularityCollection extends HTMLElement {
     if (!location.hash) history.replaceState(null, '', '#' + this.platform);
     this.renderRoute();
     this.fetchMissingRatings();
+    this.fetchMissingSizes();
   }
   // Derive thumbnail and added-date for older items from what we already have.
   backfillItems() {
@@ -723,6 +853,27 @@ class EmularityCollection extends HTMLElement {
     }
     this.save();
     if (!this.playing) this.renderGrid();
+  }
+  // Fill in the download size for one item via a HEAD request (Content-Length is a
+  // CORS-safelisted header, so it's readable cross-origin).
+  async fetchSize(item) {
+    if (item.size != null || !item.url) return;
+    try {
+      let res = await fetch(item.url, { method: 'HEAD' });
+      let len = res.headers.get('Content-Length');
+      if (len) { item.size = +len; this.save(); if (!this.playing) this.renderGrid(); }
+    } catch (e) { /* leave size unknown */ }
+  }
+  // Backfill sizes for items that don't have one yet.
+  async fetchMissingSizes() {
+    for (let item of this.items) {
+      if (item.size != null) continue;
+      if (item.url) {
+        await this.fetchSize(item);
+      } else if (item.source == 'upload') {
+        try { let blob = await filedb.get(item.id); if (blob) { item.size = blob.size; this.save(); if (!this.playing) this.renderGrid(); } } catch (e) {}
+      }
+    }
   }
   // Routes: #<platform> shows that platform's library; #play/<itemId> plays a game.
   renderRoute() {
@@ -819,25 +970,34 @@ class EmularityCollection extends HTMLElement {
     items.forEach(item => {
       let card = document.createElement('div');
       card.className = 'game-card';
+      card.dataset.id = item.id;
       card.innerHTML = `
         <img class="game-thumb" loading="lazy">
         <div class="game-info">
           <span class="game-title"></span>
           <span class="game-detail"></span>
           <span class="game-lastplayed"></span>
+          <span class="game-storage"></span>
         </div>
         <button class="game-menu" title="More options">⋮</button>
         <div class="game-menu-popup">
           <button class="menu-edit">✎ Edit info</button>
+          <button class="menu-cache"></button>
+          <button class="menu-clone"></button>
           <button class="menu-reset">⟲ Reset saved data</button>
           <button class="menu-delete">✕ Remove from collection</button>
-        </div>`;
+        </div>
+        <div class="game-progress"><div class="game-progress-fill"></div></div>`;
       let thumb = itemThumb(item), img = card.querySelector('.game-thumb');
       if (thumb) { img.src = thumb; img.addEventListener('error', () => img.remove()); }
       else img.remove();
       card.querySelector('.game-title').textContent = item.title;
-      card.querySelector('.game-detail').textContent = item.source == 'upload' ? item.filename + ' (uploaded)' : item.filename;
+      let detail = item.source == 'upload' ? item.filename + ' (uploaded)' : item.filename;
+      let sizeStr = formatBytes(item.size);
+      if (sizeStr) detail += ' · ' + sizeStr;
+      card.querySelector('.game-detail').textContent = detail;
       card.querySelector('.game-lastplayed').textContent = item.lastPlayed ? 'Played ' + relativeTime(item.lastPlayed) : 'Never played';
+      card.querySelector('.game-storage').textContent = item.cloned ? '💾 On disk' : (item.cached ? '📥 Cached on device' : '');
       card.addEventListener('click', () => { location.hash = 'play/' + item.id; });
 
       let popup = card.querySelector('.game-menu-popup');
@@ -849,6 +1009,19 @@ class EmularityCollection extends HTMLElement {
       });
       popup.addEventListener('click', ev => ev.stopPropagation());
       card.querySelector('.menu-edit').addEventListener('click', () => { this.closeMenus(); this.editItem(item); });
+
+      let cacheBtn = card.querySelector('.menu-cache');
+      cacheBtn.textContent = item.cached ? '📥 Remove from device' : '📥 Cache on device';
+      cacheBtn.addEventListener('click', () => { this.closeMenus(); item.cached ? this.uncacheItem(item) : this.cacheItem(item); });
+
+      let cloneBtn = card.querySelector('.menu-clone');
+      if (localStore.supportsDisk()) {
+        cloneBtn.textContent = item.cloned ? '💾 Remove disk clone' : '💾 Clone to disk…';
+        cloneBtn.addEventListener('click', () => { this.closeMenus(); item.cloned ? this.uncloneItem(item) : this.cloneItem(item); });
+      } else {
+        cloneBtn.remove();
+      }
+
       card.querySelector('.menu-reset').addEventListener('click', () => { this.closeMenus(); this.resetSaves(item); });
       card.querySelector('.menu-delete').addEventListener('click', () => { this.closeMenus(); this.remove(item); });
       grid.appendChild(card);
@@ -862,6 +1035,55 @@ class EmularityCollection extends HTMLElement {
 
     this.querySelector('.empty-note').style.display = items.length ? 'none' : 'block';
     this.querySelector('.sort-bar').style.display = items.length ? '' : 'none';
+  }
+  // Progress indicator drawn on the item's own card: a fill bar at the bottom and
+  // a status line in place of the storage badge. Cleared by the next renderGrid().
+  cardProgress(item, label) {
+    let card = this.querySelector(`.game-card[data-id="${CSS.escape(item.id)}"]`);
+    let fill = card && card.querySelector('.game-progress-fill');
+    let statusEl = card && card.querySelector('.game-storage');
+    if (card) card.classList.add('busy');
+    if (statusEl) statusEl.textContent = label + '…';
+    return (loaded, total) => {
+      let pct = total ? Math.round(loaded / total * 100) : null;
+      if (fill) fill.style.width = (pct != null ? pct : 100) + '%';
+      if (statusEl) statusEl.textContent = label + (pct != null ? ' ' + pct + '%' : ' ' + formatBytes(loaded));
+    };
+  }
+  diskNameFor(item) {
+    let ext = (item.filename.match(/\.[a-z0-9]+$/i) || [''])[0];
+    return (item.title.replace(/[^a-z0-9 ._-]/gi, '_').trim() || item.id) + ext;
+  }
+  async cacheItem(item) {
+    if (item.size && !confirm(`Cache "${item.title}" (${formatBytes(item.size)}) on this device for instant, offline play?`)) return;
+    let onProgress = this.cardProgress(item, 'Caching');
+    try {
+      if (navigator.storage && navigator.storage.persist) navigator.storage.persist();
+      if (item.source == 'upload') { let blob = await filedb.get(item.id); await localStore.cachePut(item.id, blob); }
+      else { await localStore.cacheStream(item.id, item.url, onProgress); }
+      item.cached = true; this.save();
+    } catch (e) { console.error(e); alert('Failed to cache on device: ' + e.message); }
+    finally { this.renderGrid(); }
+  }
+  async uncacheItem(item) {
+    await localStore.cacheDelete(item.id);
+    item.cached = false; this.save(); this.renderGrid();
+  }
+  async cloneItem(item) {
+    let diskName = this.diskNameFor(item);
+    let onProgress = this.cardProgress(item, 'Cloning to disk');
+    try {
+      if (item.source == 'upload') { let blob = await filedb.get(item.id); await localStore.diskPut(diskName, blob); }
+      else { await localStore.diskStream(diskName, item.url, onProgress); }
+      item.cloned = true; item.diskName = diskName; this.save();
+    } catch (e) {
+      if (e.name != 'AbortError') { console.error(e); alert('Failed to clone to disk: ' + e.message); }
+    } finally { this.renderGrid(); }
+  }
+  async uncloneItem(item) {
+    if (!confirm(`Delete the on-disk copy of "${item.title}"? This removes the real file from your folder.`)) return;
+    if (item.diskName) await localStore.diskDelete(item.diskName);
+    item.cloned = false; item.diskName = undefined; this.save(); this.renderGrid();
   }
   closeMenus() {
     this.querySelectorAll('.game-menu-popup.open').forEach(p => p.classList.remove('open'));
@@ -929,6 +1151,8 @@ class EmularityCollection extends HTMLElement {
     if (item.source == 'upload') {
       try { await filedb.delete(item.id); } catch (e) { console.error(e); }
     }
+    if (item.cached) { try { await localStore.cacheDelete(item.id); } catch (e) {} }
+    if (item.cloned && item.diskName) { try { await localStore.diskDelete(item.diskName); } catch (e) {} }
     this.save();
     this.renderGrid();
   }
@@ -939,7 +1163,14 @@ class EmularityCollection extends HTMLElement {
     item.lastPlayed = Date.now();
     this.save();
     let url = item.url;
-    if (item.source == 'upload') {
+    // Prefer a local copy: an on-disk clone, then a device cache, then the
+    // uploaded blob, and finally the remote URL.
+    let localFile = null;
+    if (item.cloned && item.diskName) localFile = await localStore.diskGet(item.diskName);
+    if (!localFile && item.cached) localFile = await localStore.cacheGet(item.id);
+    if (localFile) {
+      url = URL.createObjectURL(localFile);
+    } else if (item.source == 'upload') {
       let blob = await filedb.get(item.id);
       if (!blob) {
         alert('The uploaded file for this title is missing from browser storage. Remove it and add it again.');
@@ -1237,6 +1468,7 @@ class EmularityCollection extends HTMLElement {
         identifier: identifier,
         thumb: 'https://archive.org/services/img/' + identifier,
         rating: doc.avg_rating != null ? +doc.avg_rating : 0,
+        size: resolved.size,
       });
       this.dialog.close();
     } catch (e) {
@@ -1251,13 +1483,14 @@ class EmularityCollection extends HTMLElement {
     let title = this.dialog.querySelector('[name="title"]').value.trim();
     if (!url) return this.setError('A URL is required.');
     let filename = url.split('?')[0].split('/').pop() || 'software';
-    this.add({
+    let item = this.add({
       title: title || filename,
       source: 'url',
       url: url,
       filename: filename,
       exe: this.dialog.querySelector('[name="exe"]').value.trim(),
     });
+    this.fetchSize(item); // fill in size via HEAD in the background
     this.dialog.close();
   }
   async addFromUpload() {
@@ -1270,6 +1503,7 @@ class EmularityCollection extends HTMLElement {
       source: 'upload',
       filename: file.name,
       exe: this.dialog.querySelector('[name="uploadexe"]').value.trim(),
+      size: file.size,
     });
     try {
       await filedb.put(item.id, file);
