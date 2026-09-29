@@ -202,6 +202,21 @@ export class BaseEmulator extends BaseClass {
         this.dispatchEvent(new CustomEvent('canvaschange', { detail: this.canvas }));
         this.dispatchEvent(new CustomEvent('run'));
       },
+      // Fired when the emulated program quits (e.g. a DOS game exits, or `exit` is
+      // reached in the autoexec) or the runtime aborts. Lets the host show an
+      // "powered off" state instead of dropping the user to a bare prompt.
+      onExit: (code) => {
+        if (this.exited) return;
+        this.exited = true;
+        this.running = false;
+        this.dispatchEvent(new CustomEvent('exit', { detail: { code: code } }));
+      },
+      onAbort: (what) => {
+        if (this.exited) return;
+        this.exited = true;
+        this.running = false;
+        this.dispatchEvent(new CustomEvent('exit', { detail: { aborted: true, what: what } }));
+      },
       websocket: { url: 'wss://' },
     };
     if (this.wasmfileloader && this.wasmfileloader.data) {
