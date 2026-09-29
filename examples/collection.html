@@ -354,13 +354,27 @@
         color: #777;
         font-size: .75em;
       }
+      /* While playing, let the player view span the full screen so the bar can
+         anchor to the top edge instead of the centered library column. */
+      emularity-collection.playing {
+        max-width: none;
+        margin: 0;
+        padding: 0;
+      }
       .player-bar {
+        position: sticky;
+        top: 0;
+        z-index: 10;
         display: flex;
         align-items: center;
         gap: 1em;
-        padding: .5em 1em;
-        background: #111;
+        padding: .6em 1.2em;
+        background: #141414;
         border-bottom: 1px solid #333;
+        box-shadow: 0 3px 14px rgba(0, 0, 0, .6);
+      }
+      .player-bar + .emularity-emulator {
+        margin-top: 1.5em;
       }
       .player-bar button {
         background: none;
@@ -377,6 +391,82 @@
       .player-bar .player-title {
         color: #fff;
         font-weight: bold;
+      }
+      .player-bar .pb-timer {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        color: #aaa;
+        font-size: .95em;
+        font-variant-numeric: tabular-nums;
+        pointer-events: none;
+      }
+      .player-bar .pb-controls {
+        margin-left: auto;
+        display: flex;
+        gap: .4em;
+      }
+      .player-bar .pb-controls button {
+        min-width: 2.4em;
+        padding: .35em .5em;
+        font-size: 1em;
+        line-height: 1;
+      }
+      .player-bar .pb-controls button.active {
+        border-color: #49c8d7;
+        color: #49c8d7;
+        background: #0c1c1f;
+      }
+      /* Theater mode: let the game fill the browser viewport (capped to its height),
+         instead of the default centered max-width. */
+      emularity-collection.theater .emularity-emulator canvas {
+        max-width: none;
+        max-height: calc(100vh - 5em);
+        object-fit: contain;
+      }
+      .powered-off {
+        position: fixed;
+        inset: 0;
+        z-index: 30;
+        background: #08080a;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: .5em;
+        color: #ccc;
+        text-align: center;
+      }
+      .powered-off .po-title {
+        font-size: 1.7em;
+        font-weight: bold;
+        color: #fff;
+      }
+      .powered-off .po-sub {
+        color: #999;
+        margin: .25em 0 1.5em;
+      }
+      .powered-off .po-power {
+        width: 3.4em;
+        height: 3.4em;
+        border-radius: 50%;
+        border: 2px solid #49c8d7;
+        color: #49c8d7;
+        background: #0c1c1f;
+        font-size: 1.6em;
+        cursor: pointer;
+        transition: background .15s, box-shadow .15s;
+      }
+      .powered-off .po-power:hover {
+        background: #12292d;
+        box-shadow: 0 0 18px rgba(73, 200, 215, .4);
+      }
+      .powered-off .po-label {
+        color: #aaa;
+        cursor: pointer;
+        font-size: .9em;
+        margin-top: .3em;
       }
     </style>
   </head>
@@ -412,6 +502,38 @@ const SORTS = {
   'title-asc':   { label: 'Title (A–Z)', cmp: (a, b) => (a.title || '').localeCompare(b.title || '') },
   'rating-desc': { label: 'Rating',         cmp: (a, b) => (b.rating || 0) - (a.rating || 0) },
 };
+
+/* Master mute. Routes every emulator's audio through gain nodes we can silence,
+   installed globally so it catches audio graphs built after a game boots. Uses a
+   gain (not AudioContext.suspend) so the audio callback keeps firing and emulator
+   timing is unaffected. */
+const audioMute = {
+  gains: [],
+  muted: false,
+  _installed: false,
+  install() {
+    if (this._installed) return;
+    this._installed = true;
+    let orig = AudioNode.prototype.connect, self = this;
+    AudioNode.prototype.connect = function(target, ...rest) {
+      if (target instanceof AudioDestinationNode) {
+        try {
+          let gain = this.context.createGain();
+          gain.gain.value = self.muted ? 0 : 1;
+          self.gains.push(gain);
+          orig.call(this, gain);
+          return orig.call(gain, target);
+        } catch (e) { /* fall through to a plain connect */ }
+      }
+      return orig.call(this, target, ...rest);
+    };
+  },
+  set(muted) {
+    this.muted = muted;
+    this.gains.forEach(g => { try { g.gain.value = muted ? 0 : 1; } catch (e) {} });
+  }
+};
+audioMute.install();
 
 /* Tiny promise wrapper around IndexedDB, used to persist uploaded software */
 const filedb = {
@@ -492,6 +614,14 @@ function relativeTime(ts) {
   return fmt(Math.round(day / 365.25), 'year');
 }
 
+/* Format an elapsed duration (ms) as M:SS, or H:MM:SS past an hour */
+function formatDuration(ms) {
+  let s = Math.floor(Math.max(0, ms) / 1000);
+  let h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+  let pad = n => String(n).padStart(2, '0');
+  return (h > 0 ? h + ':' + pad(m) : m) + ':' + pad(sec);
+}
+
 /* The archive.org thumbnail URL for a collection item, if it came from archive.org */
 function itemThumb(item) {
   if (item.thumb) return item.thumb;
@@ -535,6 +665,9 @@ class EmularityCollection extends HTMLElement {
     this.items = stored.items || [];
     this.platform = PLATFORMS[stored.platform] ? stored.platform : Object.keys(PLATFORMS)[0];
     this.sort = SORTS[stored.sort] ? stored.sort : 'added-desc';
+    this.muted = !!stored.muted;
+    this.theater = !!stored.theater;
+    audioMute.muted = this.muted;
     this.playing = false;
     // Fill in derived/looked-up fields (thumbnail, added date, rating) for items
     // saved before those existed, then keep enriching in the background.
@@ -625,7 +758,7 @@ class EmularityCollection extends HTMLElement {
   }
   save() {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ platform: this.platform, sort: this.sort, items: this.items }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ platform: this.platform, sort: this.sort, muted: this.muted, theater: this.theater, items: this.items }));
     } catch (e) {
       console.error('Failed to save collection', e);
     }
@@ -820,7 +953,9 @@ class EmularityCollection extends HTMLElement {
       emu = document.createElement('emularity-dosbox');
       emu.setAttribute('wasmroot', '../emulators/dosbox');
       emu.setAttribute('splashlogo', '../logos/emularity-transparent.png');
-      if (item.exe) emu.setAttribute('exe', exeToAutoexec(item.exe));
+      // Append `exit` so DOSBox quits when the program exits (fires the emulator's
+      // exit event) instead of dropping the user to a bare DOS prompt.
+      if (item.exe) emu.setAttribute('exe', exeToAutoexec(item.exe) + '\nexit');
       let media = document.createElement(/\.(img|ima)$/i.test(item.filename) ? 'emularity-dosbox-floppy' : 'emularity-dosbox-drive');
       media.setAttribute('letter', media.tagName.toLowerCase().includes('floppy') ? 'a' : 'c');
       media.setAttribute('url', url);
@@ -862,13 +997,73 @@ class EmularityCollection extends HTMLElement {
     // (same as the browser Back button), which returns to the library route.
     let bar = document.createElement('div');
     bar.className = 'player-bar';
-    bar.innerHTML = '<button>◀ Back to collection</button><span class="player-title"></span>';
+    bar.innerHTML = `
+      <button class="pb-back">◀ Back to collection</button>
+      <span class="player-title"></span>
+      <span class="pb-timer" title="Time played this session">0:00</span>
+      <span class="pb-controls">
+        <button class="pb-mute"></button>
+        <button class="pb-theater" title="Theater mode">▭</button>
+        <button class="pb-fullscreen" title="Fullscreen">⛶</button>
+      </span>`;
     bar.querySelector('.player-title').textContent = item.title;
-    bar.querySelector('button').addEventListener('click', () => history.back());
+    bar.querySelector('.pb-back').addEventListener('click', () => history.back());
 
+    // Count up play time for this session (the interval dies on the reload that
+    // "Back to collection" triggers).
+    let start = Date.now(), timerEl = bar.querySelector('.pb-timer');
+    let tick = () => { timerEl.textContent = formatDuration(Date.now() - start); };
+    tick();
+    this.playTimer = setInterval(tick, 1000);
+
+    // When the emulated program exits, show a "powered off" screen instead of a
+    // bare DOS prompt.
+    emu.addEventListener('exit', () => this.showPoweredOff(item));
+
+    let muteBtn = bar.querySelector('.pb-mute');
+    let updateMute = () => { muteBtn.textContent = this.muted ? '🔇' : '🔊'; muteBtn.title = this.muted ? 'Unmute' : 'Mute'; };
+    updateMute();
+    muteBtn.addEventListener('click', () => { this.muted = !this.muted; audioMute.set(this.muted); this.save(); updateMute(); });
+
+    let theaterBtn = bar.querySelector('.pb-theater');
+    theaterBtn.classList.toggle('active', this.theater);
+    theaterBtn.addEventListener('click', () => {
+      this.theater = !this.theater;
+      this.classList.toggle('theater', this.theater);
+      theaterBtn.classList.toggle('active', this.theater);
+      this.save();
+    });
+
+    bar.querySelector('.pb-fullscreen').addEventListener('click', () => {
+      let c = this.currentEmu && this.currentEmu.canvas;
+      if (document.fullscreenElement) document.exitFullscreen();
+      else if (c && c.requestFullscreen) c.requestFullscreen().catch(e => console.warn('Emularity: fullscreen failed', e));
+    });
+
+    this.currentEmu = emu;
+    this.classList.add('playing');
+    this.classList.toggle('theater', this.theater);
     this.innerHTML = '';
     this.appendChild(bar);
     this.appendChild(emu);
+  }
+  showPoweredOff(item) {
+    if (this.poweredOff) return;
+    this.poweredOff = true;
+    clearInterval(this.playTimer);
+    if (document.fullscreenElement) { try { document.exitFullscreen(); } catch (e) {} }
+    let overlay = document.createElement('div');
+    overlay.className = 'powered-off';
+    overlay.innerHTML = `
+      <div class="po-title"></div>
+      <p class="po-sub">The game has powered off.</p>
+      <button class="po-power" title="Power on">⏻</button>
+      <span class="po-label">Power on</span>`;
+    overlay.querySelector('.po-title').textContent = item.title;
+    let powerOn = () => { location.reload(); };
+    overlay.querySelector('.po-power').addEventListener('click', powerOn);
+    overlay.querySelector('.po-label').addEventListener('click', powerOn);
+    this.appendChild(overlay);
   }
 
   /* ===== Add-software dialog ===== */
