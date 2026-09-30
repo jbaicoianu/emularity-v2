@@ -8207,8 +8207,175 @@ return /******/ (function(modules) { // webpackBootstrap
 	
 	    return HTML5FS;
 	}(BaseFileSystem));
-	
+
 	HTML5FS.Name = "HTML5FS";
+
+	/**
+	 * Emularity patch: an async BrowserFS backend over the File System Access API.
+	 * Works on any FileSystemDirectoryHandle (a user-picked folder or an OPFS
+	 * directory), storing files at their real paths so the folder is browsable.
+	 * Intended as the async target of AsyncMirror, so the running emulator uses a
+	 * synchronous in-memory copy while writes mirror out to real files.
+	 */
+	var FileSystemAccessFileSystem = (function (BaseFileSystem$$1) {
+	    function FileSystemAccessFileSystem(dirHandle) {
+	        BaseFileSystem$$1.call(this);
+	        this._root = dirHandle;
+	    }
+	    if ( BaseFileSystem$$1 ) FileSystemAccessFileSystem.__proto__ = BaseFileSystem$$1;
+	    FileSystemAccessFileSystem.prototype = Object.create( BaseFileSystem$$1 && BaseFileSystem$$1.prototype );
+	    FileSystemAccessFileSystem.prototype.constructor = FileSystemAccessFileSystem;
+
+	    FileSystemAccessFileSystem.Create = function Create (opts, cb) {
+	        try { cb(null, new FileSystemAccessFileSystem(opts.handle)); } catch (e) { cb(e); }
+	    };
+	    FileSystemAccessFileSystem.isAvailable = function isAvailable () {
+	        return typeof FileSystemDirectoryHandle !== 'undefined';
+	    };
+	    FileSystemAccessFileSystem.prototype.getName = function () { return FileSystemAccessFileSystem.Name; };
+	    FileSystemAccessFileSystem.prototype.isReadOnly = function () { return false; };
+	    FileSystemAccessFileSystem.prototype.supportsSynch = function () { return false; };
+	    FileSystemAccessFileSystem.prototype.supportsProps = function () { return false; };
+	    FileSystemAccessFileSystem.prototype.supportsLinks = function () { return false; };
+
+	    FileSystemAccessFileSystem.prototype._parts = function (p) { return p.split('/').filter(function (x) { return x.length; }); };
+	    FileSystemAccessFileSystem.prototype._dir = async function (parts, create) {
+	        var h = this._root;
+	        for (var i = 0; i < parts.length; i++) h = await h.getDirectoryHandle(parts[i], { create: !!create });
+	        return h;
+	    };
+	    FileSystemAccessFileSystem.prototype._parent = async function (p, create) {
+	        var parts = this._parts(p), base = parts.pop();
+	        return { dir: await this._dir(parts, create), base: base };
+	    };
+	    FileSystemAccessFileSystem.prototype._err = function (e, p) {
+	        if (e && e.name === 'NotFoundError') return ApiError.ENOENT(p);
+	        if (e && e.name === 'InvalidModificationError') return ApiError.ENOTEMPTY(p);
+	        return new ApiError(ErrorCode.EIO, (e && e.message) || String(e), p);
+	    };
+	    // Log a genuinely-failed op so a load failure names the exact path/reason.
+	    // AsyncMirror aborts its whole initial copy if any single entry errors, so
+	    // without this a broken entry just yields a silent empty filesystem.
+	    FileSystemAccessFileSystem.prototype._logErr = function (op, p, e) {
+	        try { console.warn('[FSA]', op + ':', p, e ? ('- ' + ((e.name || '') + ' ' + (e.message || ''))) : ''); } catch (_) {}
+	    };
+	    // Chrome writes to a sibling "<name>.crswap" temp file during createWritable()
+	    // and renames it into place on close(). A crash or reload mid-save leaves the
+	    // orphan behind in a real (showDirectoryPicker) folder. It is never real
+	    // content, so never surface it as a file.
+	    FileSystemAccessFileSystem.prototype._isTemp = function (name) {
+	        return /\.crswap$/i.test(name);
+	    };
+
+	    FileSystemAccessFileSystem.prototype.stat = function (p, isLstat, cb) {
+	        var self = this;
+	        (async function () {
+	            var parts = self._parts(p);
+	            if (!parts.length) return cb(null, new Stats(FileType.DIRECTORY, 4096));
+	            var base = parts.pop(), dir;
+	            try { dir = await self._dir(parts, false); } catch (e) { return cb(ApiError.ENOENT(p)); }
+	            try { var fh = await dir.getFileHandle(base); var f = await fh.getFile(); return cb(null, new Stats(FileType.FILE, f.size)); } catch (e) {}
+	            try { await dir.getDirectoryHandle(base); return cb(null, new Stats(FileType.DIRECTORY, 4096)); } catch (e) {}
+	            cb(ApiError.ENOENT(p));
+	        })().catch(function (e) { self._logErr('stat', p, e); cb(self._err(e, p)); });
+	    };
+	    FileSystemAccessFileSystem.prototype.readdir = function (p, cb) {
+	        var self = this;
+	        (async function () {
+	            var dir = await self._dir(self._parts(p), false), names = [];
+	            for await (var name of dir.keys()) {
+	                // Skip write-temp artifacts outright.
+	                if (self._isTemp(name)) continue;
+	                // Only return entries that can actually be re-opened by name. A real
+	                // (OS-backed) folder may hold a name that enumeration reports but that
+	                // getFileHandle/getDirectoryHandle can't reopen (e.g. a trailing dot or
+	                // space, or a reserved name that the OS normalized). Such an entry would
+	                // otherwise make the caller's stat() return ENOENT and abort
+	                // AsyncMirror's entire initial copy, leaving a blank drive. Drop it
+	                // (with a warning) so the rest of the folder still loads.
+	                var ok = false;
+	                try { await dir.getFileHandle(name); ok = true; } catch (e1) {
+	                    try { await dir.getDirectoryHandle(name); ok = true; } catch (e2) {}
+	                }
+	                if (ok) names.push(name);
+	                else self._logErr('readdir/skip-unreadable-entry', (p === '/' ? '' : p) + '/' + name, null);
+	            }
+	            cb(null, names);
+	        })().catch(function (e) { self._logErr('readdir', p, e); cb(self._err(e, p)); });
+	    };
+	    FileSystemAccessFileSystem.prototype.readFile = function (p, encoding, flag, cb) {
+	        var self = this;
+	        (async function () {
+	            var pr = await self._parent(p, false);
+	            var fh = await pr.dir.getFileHandle(pr.base), f = await fh.getFile();
+	            var buf = arrayBuffer2Buffer(await f.arrayBuffer());
+	            cb(null, encoding ? buf.toString(encoding) : buf);
+	        })().catch(function (e) { self._logErr('readFile', p, e); cb(self._err(e, p)); });
+	    };
+	    FileSystemAccessFileSystem.prototype.writeFile = function (p, data, encoding, flag, mode, cb) {
+	        var self = this;
+	        (async function () {
+	            var pr = await self._parent(p, true);
+	            var fh = await pr.dir.getFileHandle(pr.base, { create: true }), w = await fh.createWritable();
+	            var bytes = typeof data === 'string' ? new TextEncoder().encode(data) : buffer2Uint8array(data);
+	            await w.write(bytes); await w.close();
+	            cb(null);
+	        })().catch(function (e) { cb(self._err(e, p)); });
+	    };
+	    FileSystemAccessFileSystem.prototype.unlink = function (p, cb) {
+	        var self = this;
+	        (async function () { var pr = await self._parent(p, false); await pr.dir.removeEntry(pr.base); cb(null); })().catch(function (e) { cb(self._err(e, p)); });
+	    };
+	    FileSystemAccessFileSystem.prototype.rmdir = function (p, cb) {
+	        var self = this;
+	        (async function () { var pr = await self._parent(p, false); await pr.dir.removeEntry(pr.base, { recursive: true }); cb(null); })().catch(function (e) { cb(self._err(e, p)); });
+	    };
+	    FileSystemAccessFileSystem.prototype.mkdir = function (p, mode, cb) {
+	        var self = this;
+	        (async function () { var pr = await self._parent(p, true); await pr.dir.getDirectoryHandle(pr.base, { create: true }); cb(null); })().catch(function (e) { cb(self._err(e, p)); });
+	    };
+	    FileSystemAccessFileSystem.prototype.rename = function (oldP, newP, cb) {
+	        var self = this;
+	        (async function () { await self._rename(oldP, newP); cb(null); })().catch(function (e) { cb(self._err(e, oldP)); });
+	    };
+	    // Real files carry no POSIX mode/owner/time metadata: accept and ignore.
+	    FileSystemAccessFileSystem.prototype.chmod = function (p, isLchmod, mode, cb) { cb(null); };
+	    FileSystemAccessFileSystem.prototype.chown = function (p, isLchown, uid, gid, cb) { cb(null); };
+	    FileSystemAccessFileSystem.prototype.utimes = function (p, atime, mtime, cb) { cb(null); };
+
+	    FileSystemAccessFileSystem.prototype._rename = async function (oldP, newP) {
+	        var op = await this._parent(oldP, false), np = await this._parent(newP, true);
+	        var fh = null;
+	        try { fh = await op.dir.getFileHandle(op.base); } catch (e) {}
+	        if (fh) {
+	            if (fh.move) { try { await fh.move(np.dir, np.base); return; } catch (e) {} }
+	            var data = await (await fh.getFile()).arrayBuffer();
+	            var nfh = await np.dir.getFileHandle(np.base, { create: true }), w = await nfh.createWritable();
+	            await w.write(data); await w.close();
+	            await op.dir.removeEntry(op.base);
+	            return;
+	        }
+	        var odh = await op.dir.getDirectoryHandle(op.base), ndh = await np.dir.getDirectoryHandle(np.base, { create: true });
+	        await this._copyDir(odh, ndh);
+	        await op.dir.removeEntry(op.base, { recursive: true });
+	    };
+	    FileSystemAccessFileSystem.prototype._copyDir = async function (src, dst) {
+	        for await (var entry of src.entries()) {
+	            var name = entry[0], handle = entry[1];
+	            if (handle.kind === 'directory') {
+	                await this._copyDir(handle, await dst.getDirectoryHandle(name, { create: true }));
+	            } else {
+	                var data = await (await handle.getFile()).arrayBuffer();
+	                var nfh = await dst.getFileHandle(name, { create: true }), w = await nfh.createWritable();
+	                await w.write(data); await w.close();
+	            }
+	        }
+	    };
+
+	    return FileSystemAccessFileSystem;
+	}(BaseFileSystem));
+	FileSystemAccessFileSystem.Name = "FileSystemAccess";
+	FileSystemAccessFileSystem.Options = {};
 	HTML5FS.Options = {
 	    size: {
 	        type: "number",
@@ -15593,7 +15760,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	/**
 	 * @hidden
 	 */
-	var Backends = { AsyncMirror: AsyncMirror, Dropbox: DropboxFileSystem, Emscripten: EmscriptenFileSystem, FolderAdapter: FolderAdapter, HTML5FS: HTML5FS, InMemory: InMemoryFileSystem, IndexedDB: IndexedDBFileSystem, IsoFS: IsoFS, LocalStorage: LocalStorageFileSystem, MountableFileSystem: MountableFileSystem, OverlayFS: OverlayFS, WorkerFS: WorkerFS, XmlHttpRequest: XmlHttpRequest, ZipFS: ZipFS };
+	var Backends = { AsyncMirror: AsyncMirror, Dropbox: DropboxFileSystem, Emscripten: EmscriptenFileSystem, FileSystemAccess: FileSystemAccessFileSystem, FolderAdapter: FolderAdapter, HTML5FS: HTML5FS, InMemory: InMemoryFileSystem, IndexedDB: IndexedDBFileSystem, IsoFS: IsoFS, LocalStorage: LocalStorageFileSystem, MountableFileSystem: MountableFileSystem, OverlayFS: OverlayFS, WorkerFS: WorkerFS, XmlHttpRequest: XmlHttpRequest, ZipFS: ZipFS };
 	
 	/**
 	 * BrowserFS's main module. This is exposed in the browser via the BrowserFS global.
