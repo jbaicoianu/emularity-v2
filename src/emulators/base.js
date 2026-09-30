@@ -23,6 +23,7 @@ export class BaseEmulator extends BaseClass {
   sound = true
   autostart = true
   persist = false
+  diskHandle = null
   canvas = null
   files = {}
   oncreate = null
@@ -459,7 +460,26 @@ export class BaseEmulator extends BaseClass {
     // failure falls back to memory-only rather than blocking the boot.
     let inMemoryFS = new BrowserFS.FileSystem.InMemory();
     let deltaFS = inMemoryFS;
-    if (this.persist && BrowserFS.FileSystem.IndexedDB.isAvailable()) {
+    if (this.diskHandle && BrowserFS.FileSystem.FileSystemAccess && BrowserFS.FileSystem.FileSystemAccess.isAvailable()) {
+      // Installed to disk: the working directory lives in a real folder. AsyncMirror
+      // loads it into the in-memory sync layer at boot and mirrors every write back
+      // out to real files, so saves and documents appear on disk as they happen.
+      deltaFS = await new Promise(resolve => {
+        let mirror = new BrowserFS.FileSystem.AsyncMirror(inMemoryFS, new BrowserFS.FileSystem.FileSystemAccess(this.diskHandle));
+        mirror.initialize(err => {
+          if (err) {
+            // The folder's contents couldn't be loaded (a locked/odd entry aborts
+            // AsyncMirror's whole copy). Falling back to a blank in-memory layer
+            // shows an empty drive but does NOT touch the folder, so the real files
+            // are safe — check the [FSA] warning above for the exact path/reason.
+            console.error('Emularity: failed to load installed disk folder; showing an EMPTY drive this boot (files on disk are untouched). Cause:', err);
+            resolve(inMemoryFS);
+          } else {
+            resolve(mirror);
+          }
+        });
+      });
+    } else if (this.persist && BrowserFS.FileSystem.IndexedDB.isAvailable()) {
       deltaFS = await new Promise(resolve => {
         let mirror = new BrowserFS.FileSystem.AsyncMirror(
           inMemoryFS,
@@ -542,6 +562,7 @@ export class BaseEmulator extends BaseClass {
         fs.writeFile(this.emulatorroot + f.path, f.data);
       }
     });
+
   }
   getFiles() {
     let files = [];
