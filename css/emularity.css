@@ -8,6 +8,10 @@
   margin: 0 auto;
   display: block;
   order: 1;
+  /* Pure black so the letterbox bars that object-fit: contain produces (in theater /
+     fullscreen, when the canvas aspect doesn't match the window) blend into the black
+     page instead of reading as odd padding around the picture. */
+  background: #000;
   /* Nearest-neighbor scaling so upscaled low-res emulator output stays crisp
      instead of blurring with bilinear interpolation. */
   image-rendering: -moz-crisp-edges;
@@ -37,6 +41,43 @@
 }
 emularity-file {
   display: none;
+}
+/* v86 (x86 PC) renders into a container holding its canvas (and a text <div> it needs
+   but we keep hidden; text modes are drawn on the canvas). Keep it on a black field
+   like the other emulators. */
+.emularity-emulator .v86-screen {
+  width: 100%;
+  max-width: 960px;
+  margin: 0 auto;
+  background: #000;
+  order: 1;
+  overflow: auto;
+}
+.emularity-emulator .v86-screen canvas {
+  display: block;
+  outline: none; /* focused for keyboard/mouse input; no focus ring over the picture */
+  margin: 0 auto;
+  image-rendering: pixelated;
+  image-rendering: -moz-crisp-edges;
+}
+.emularity-emulator .v86-screen:fullscreen,
+.emularity-emulator .v86-screen:-webkit-full-screen {
+  max-width: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.emularity-emulator .v86-screen:fullscreen canvas {
+  max-width: 100%;
+  max-height: 100%;
+}
+/* The serial console renders to a 2D canvas (CanvasTerminal), exposed as emu.canvas so
+   hosts can texture it like any other emulator. It picks up the generic
+   `.emularity-emulator canvas` sizing; keep the text crisp when it scales down. */
+.emularity-emulator .v86-term-canvas {
+  image-rendering: auto;
+  /* Letterbox in true black (the terminal's own rendered background stays charcoal). */
+  background: #000;
 }
 emularity-keyboard {
   display: flex;
