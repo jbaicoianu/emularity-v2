@@ -1,6 +1,7 @@
 import { BaseEmulator } from './emulators/base.js'
 import { DOSBoxEmulator, DOSBoxEmulatorFloppy, DOSBoxEmulatorDrive } from './emulators/dosbox.js'
 import { MAMEEmulator } from './emulators/mame.js'
+import { V86Emulator } from './emulators/v86.js'
 import { VirtualFile } from './fs/virtualfile.js'
 import { VirtualKeyboard } from './inputs.js'
 
@@ -8,7 +9,8 @@ export default {
   emulators: {
     Emulator: BaseEmulator,
     DOSBoxEmulator,
-    MAMEEmulator
+    MAMEEmulator,
+    V86Emulator
   },
   input: {
     VirtualKeyboard,
@@ -33,4 +35,6 @@ if (typeof customElements != 'undefined') {
   customElements.define('emularity-dosbox-drive', DOSBoxEmulatorDrive);
 
   customElements.define('emularity-mame', MAMEEmulator);
+
+  customElements.define('emularity-x86', V86Emulator);
 }
