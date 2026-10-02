@@ -291,6 +291,8 @@ export class BaseEmulator extends BaseClass {
             this.drawLogo();
             resolve();
           });
+          // A missing logo shouldn't stop the emulator from starting
+          img.addEventListener('error', () => resolve());
         } else {
           resolve();
         }
