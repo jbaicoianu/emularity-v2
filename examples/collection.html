@@ -144,10 +144,15 @@
         display: block;
       }
       .game-card .game-progress-fill {
-        width: 0;
+        width: 100%;
         height: 100%;
         background: #49c8d7;
-        transition: width .2s;
+        transform: scaleX(0);
+        transform-origin: left;
+        /* No transition: we step scaleX ourselves (deduped to whole-percent changes).
+           A transition would restart a compositor animation on every step and force a
+           style-recalc/pre-paint/commit cycle each frame for no visible benefit. */
+        will-change: transform;
       }
       .game-card .game-menu {
         position: absolute;
@@ -452,7 +457,10 @@
       }
       /* Theater mode: let the game fill the browser viewport (capped to its height),
          instead of the default centered max-width. */
-      emularity-collection.theater .emularity-emulator canvas {
+      emularity-collection-player {
+        display: block;
+      }
+      emularity-collection-player.theater .emularity-emulator canvas {
         max-width: none;
         max-height: calc(100vh - 5em);
         object-fit: contain;
@@ -505,960 +513,1282 @@
   <body>
     <emularity-collection></emularity-collection>
 
+
     <script>
-const STORAGE_KEY = 'emularity-collection';
+/* ===== Helpers ===== */
 
-const PLATFORMS = {
-  "dos": {
-    label: 'IBM PC',
-    sublabel: 'DOSBox',
-    query: 'emulator:(dosbox)',
-    accept: '.zip,.img,.ima',
-    urlHint: 'A zip file, mounted as drive C:',
-    exeField: true,
-  },
-  "apple2e": {
-    label: 'Apple IIe',
-    sublabel: 'MAME',
-    query: 'emulator:(apple2ee)',
-    accept: '.dsk,.do,.po,.nib,.woz',
-    urlHint: 'A floppy disk image (.dsk, .do, .po, .nib, .woz)',
-    exeField: false,
-  },
-};
-
-/* Sort options for the installed-software grid */
-const SORTS = {
-  'added-desc':  { label: 'Recently added', cmp: (a, b) => (b.added || 0) - (a.added || 0) },
-  'played-desc': { label: 'Last played',    cmp: (a, b) => (b.lastPlayed || 0) - (a.lastPlayed || 0) },
-  'title-asc':   { label: 'Title (A–Z)', cmp: (a, b) => (a.title || '').localeCompare(b.title || '') },
-  'rating-desc': { label: 'Rating',         cmp: (a, b) => (b.rating || 0) - (a.rating || 0) },
-};
-
-/* Master mute. Routes every emulator's audio through gain nodes we can silence,
-   installed globally so it catches audio graphs built after a game boots. Uses a
-   gain (not AudioContext.suspend) so the audio callback keeps firing and emulator
-   timing is unaffected. */
-const audioMute = {
-  gains: [],
-  muted: false,
-  _installed: false,
-  install() {
-    if (this._installed) return;
-    this._installed = true;
-    let orig = AudioNode.prototype.connect, self = this;
-    AudioNode.prototype.connect = function(target, ...rest) {
-      if (target instanceof AudioDestinationNode) {
-        try {
-          let gain = this.context.createGain();
-          gain.gain.value = self.muted ? 0 : 1;
-          self.gains.push(gain);
-          orig.call(this, gain);
-          return orig.call(gain, target);
-        } catch (e) { /* fall through to a plain connect */ }
-      }
-      return orig.call(this, target, ...rest);
-    };
-  },
-  set(muted) {
-    this.muted = muted;
-    this.gains.forEach(g => { try { g.gain.value = muted ? 0 : 1; } catch (e) {} });
+class Format {
+  /* Human-friendly "time ago" for a timestamp (ms), or "never" if unset */
+  static relativeTime(ts) {
+    if (!ts) return 'never';
+    let sec = Math.max(0, Math.round((Date.now() - ts) / 1000));
+    let fmt = (n, u) => n + ' ' + u + (n == 1 ? '' : 's') + ' ago';
+    if (sec < 45) return 'just now';
+    let min = Math.round(sec / 60);
+    if (min < 60) return fmt(min, 'minute');
+    let hr = Math.round(min / 60);
+    if (hr < 24) return fmt(hr, 'hour');
+    let day = Math.round(hr / 24);
+    if (day < 7) return fmt(day, 'day');
+    if (day < 70) return fmt(Math.round(day / 7), 'week');
+    let mo = Math.round(day / 30.44);
+    if (mo < 12) return fmt(mo, 'month');
+    return fmt(Math.round(day / 365.25), 'year');
   }
-};
-audioMute.install();
+  /* A byte count as a human-friendly size (e.g. "4.2 MB") */
+  static bytes(bytes) {
+    if (bytes == null || !isFinite(bytes) || bytes < 0) return null;
+    if (bytes < 1024) return bytes + ' B';
+    let units = ['KB', 'MB', 'GB', 'TB'], v = bytes / 1024, i = 0;
+    while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
+    return (v < 10 ? v.toFixed(1) : Math.round(v)) + ' ' + units[i];
+  }
+  /* An elapsed duration (ms) as M:SS, or H:MM:SS past an hour */
+  static duration(ms) {
+    let s = Math.floor(Math.max(0, ms) / 1000);
+    let h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+    let pad = n => String(n).padStart(2, '0');
+    return (h > 0 ? h + ':' + pad(m) : m) + ':' + pad(sec);
+  }
+}
 
-/* Tiny promise wrapper around IndexedDB. Stores: 'files' (uploaded software),
-   'cache' (device-cache fallback when OPFS is unavailable), 'handles' (a saved
-   File System Access directory handle for "Clone to disk"). */
-const idb = {
-  open() {
-    if (this._db) return Promise.resolve(this._db);
+/* archive.org's search and metadata APIs */
+class ArchiveOrg {
+  static SEARCH_ROWS = 50;
+
+  static async advancedSearch(query, fields, extra = {}) {
+    let params = new URLSearchParams();
+    params.append('q', query);
+    fields.forEach(f => params.append('fl[]', f));
+    for (let k in extra) params.append(k, String(extra[k]));
+    params.append('output', 'json');
+    let res = await fetch('https://archive.org/advancedsearch.php?' + params);
+    return (await res.json()).response;
+  }
+  static async search(query, page = 1) {
+    let r = await this.advancedSearch(query, ['identifier', 'title', 'year', 'avg_rating'],
+      { 'sort[]': 'downloads desc', rows: this.SEARCH_ROWS, page });
+    return { docs: r.docs, total: r.numFound };
+  }
+  /* Ratings for a batch of identifiers ({ id: rating }). avg_rating is only exposed
+     by the advancedsearch API, so query all of them at once. */
+  static async ratings(ids) {
+    let r = await this.advancedSearch('identifier:(' + ids.join(' OR ') + ')', ['identifier', 'avg_rating'], { rows: ids.length });
+    let ratings = {};
+    r.docs.forEach(d => { ratings[d.identifier] = d.avg_rating != null ? +d.avg_rating : 0; });
+    return ratings;
+  }
+  /* Given an identifier, figure out the software file to load and how to start it */
+  static async resolveItem(identifier) {
+    let res = await fetch('https://archive.org/metadata/' + identifier);
+    let data = await res.json();
+    let meta = data.metadata || {};
+    let ext = (meta.emulator_ext || '').toLowerCase();
+    let file = ext ? data.files.find(f => f.name.toLowerCase().endsWith('.' + ext)) : null;
+    if (!file) file = data.files.find(f => /\.(zip|dsk|do|po|nib|woz|img|ima)$/i.test(f.name));
+    if (!file) throw new Error('No usable software file found in this item');
+    return {
+      title: (Array.isArray(meta.title) ? meta.title[0] : meta.title) || identifier,
+      filename: file.name,
+      url: `https://cors.archive.org/cors/${identifier}/${encodeURIComponent(file.name)}`,
+      exe: meta.emulator_start || '',
+      size: file.size != null ? +file.size : undefined,
+    };
+  }
+  /* Recover the identifier from a download URL */
+  static idFromUrl(url) {
+    let m = url && url.match(/cors\.archive\.org\/cors\/([^\/?#]+)/);
+    return m ? decodeURIComponent(m[1]) : null;
+  }
+  static thumbUrl(identifier) {
+    return 'https://archive.org/services/img/' + identifier;
+  }
+}
+
+/* Browser-side storage backends:
+   - uploads: uploaded software (IndexedDB store 'files')
+   - "Cache on device": OPFS, with IndexedDB store 'cache' as a fallback
+   - "Clone to disk" / "Install to disk": File System Access, a real user-chosen
+     folder whose handle is remembered in IndexedDB store 'handles' */
+class LocalStore {
+  static #db = null;
+
+  static supportsDisk() { return typeof window.showDirectoryPicker === 'function'; }
+  static supportsOPFS() { return !!(navigator.storage && navigator.storage.getDirectory); }
+
+  // ---- IndexedDB ----
+  static #open() {
+    if (this.#db) return Promise.resolve(this.#db);
     return new Promise((resolve, reject) => {
       let req = indexedDB.open('emularity-collection', 2);
       req.onupgradeneeded = ev => {
         let db = ev.target.result;
         for (let s of ['files', 'cache', 'handles']) if (!db.objectStoreNames.contains(s)) db.createObjectStore(s);
       };
-      req.onsuccess = ev => { this._db = ev.target.result; resolve(this._db); };
+      req.onsuccess = ev => { this.#db = ev.target.result; resolve(this.#db); };
       req.onerror = () => reject(req.error);
     });
-  },
-  async put(store, key, val) {
-    let db = await this.open();
+  }
+  static async #idbPut(store, key, val) {
+    let db = await this.#open();
     return new Promise((res, rej) => { let tx = db.transaction(store, 'readwrite'); tx.objectStore(store).put(val, key); tx.oncomplete = res; tx.onerror = () => rej(tx.error); });
-  },
-  async get(store, key) {
-    let db = await this.open();
+  }
+  static async #idbGet(store, key) {
+    let db = await this.#open();
     return new Promise((res, rej) => { let r = db.transaction(store).objectStore(store).get(key); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
-  },
-  async delete(store, key) {
-    let db = await this.open();
+  }
+  static async #idbDelete(store, key) {
+    let db = await this.#open();
     return new Promise((res, rej) => { let tx = db.transaction(store, 'readwrite'); tx.objectStore(store).delete(key); tx.oncomplete = res; tx.onerror = () => rej(tx.error); });
-  },
-};
-/* Thin wrapper for uploaded-software blobs (store 'files') */
-const filedb = {
-  put: (id, blob) => idb.put('files', id, blob),
-  get: (id) => idb.get('files', id),
-  delete: (id) => idb.delete('files', id),
-};
+  }
 
-/* Local storage backends for "Cache on device" (OPFS, IndexedDB fallback) and
-   "Clone to disk" (File System Access, a real user-chosen folder). */
-const localStore = {
-  supportsDisk() { return typeof window.showDirectoryPicker === 'function'; },
-  supportsOPFS() { return !!(navigator.storage && navigator.storage.getDirectory); },
+  // ---- network ----
+  /* Fetch a URL, streaming chunks into `sink(chunk)`; reports (loaded, total) */
+  static async stream(url, sink, onProgress) {
+    let res = await fetch(url);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    let total = +res.headers.get('Content-Length') || 0, reader = res.body.getReader(), loaded = 0;
+    while (true) {
+      let { done, value } = await reader.read();
+      if (done) break;
+      await sink(value);
+      loaded += value.byteLength;
+      if (onProgress) onProgress(loaded, total);
+    }
+  }
+  static async fetchBlob(url, onProgress) {
+    let chunks = [];
+    await this.stream(url, c => chunks.push(c), onProgress);
+    return new Blob(chunks);
+  }
+  static async #streamToFile(fileHandle, url, onProgress) {
+    let w = await fileHandle.createWritable();
+    await this.stream(url, chunk => w.write(chunk), onProgress);
+    await w.close();
+  }
+  static async #writeToFile(fileHandle, blob) {
+    let w = await fileHandle.createWritable();
+    await w.write(blob); await w.close();
+  }
 
-  async _opfsDir() {
+  // ---- uploads ----
+  static uploadPut(id, blob) { return this.#idbPut('files', id, blob); }
+  static uploadGet(id) { return this.#idbGet('files', id); }
+  static uploadDelete(id) { return this.#idbDelete('files', id); }
+
+  // ---- device cache ----
+  static async #opfsDir() {
     let root = await navigator.storage.getDirectory();
     return root.getDirectoryHandle('emularity-cache', { create: true });
-  },
-  // ---- device cache ----
-  async cachePut(id, blob) {
-    if (this.supportsOPFS()) {
-      let dir = await this._opfsDir(), fh = await dir.getFileHandle(id, { create: true }), w = await fh.createWritable();
-      await w.write(blob); await w.close();
-    } else {
-      await idb.put('cache', id, blob);
-    }
-  },
-  // stream a URL straight into the device cache (memory-efficient for big files)
-  async cacheStream(id, url, onProgress) {
-    if (this.supportsOPFS()) {
-      let dir = await this._opfsDir(), fh = await dir.getFileHandle(id, { create: true }), w = await fh.createWritable();
-      await streamInto(url, chunk => w.write(chunk), onProgress);
-      await w.close();
-    } else {
-      let blob = await fetchBlob(url, onProgress);
-      await idb.put('cache', id, blob);
-    }
-  },
-  async cacheGet(id) {
+  }
+  static async cachePut(id, blob) {
+    if (this.supportsOPFS()) await this.#writeToFile(await (await this.#opfsDir()).getFileHandle(id, { create: true }), blob);
+    else await this.#idbPut('cache', id, blob);
+  }
+  // Stream a URL straight into the device cache (memory-efficient for big files)
+  static async cacheStream(id, url, onProgress) {
+    if (this.supportsOPFS()) await this.#streamToFile(await (await this.#opfsDir()).getFileHandle(id, { create: true }), url, onProgress);
+    else await this.#idbPut('cache', id, await this.fetchBlob(url, onProgress));
+  }
+  static async cacheGet(id) {
     try {
-      if (this.supportsOPFS()) { let dir = await this._opfsDir(), fh = await dir.getFileHandle(id); return await fh.getFile(); }
-      return await idb.get('cache', id);
+      if (this.supportsOPFS()) return await (await (await this.#opfsDir()).getFileHandle(id)).getFile();
+      return await this.#idbGet('cache', id);
     } catch (e) { return null; }
-  },
-  async cacheDelete(id) {
-    try { if (this.supportsOPFS()) { let dir = await this._opfsDir(); await dir.removeEntry(id); } else await idb.delete('cache', id); } catch (e) {}
-  },
-  // ---- disk clone (File System Access) ----
-  async pickDiskDir() {
+  }
+  static async cacheDelete(id) {
+    try {
+      if (this.supportsOPFS()) await (await this.#opfsDir()).removeEntry(id);
+      else await this.#idbDelete('cache', id);
+    } catch (e) {}
+  }
+
+  // ---- disk folder (File System Access) ----
+  static async pickDiskDir() {
     let handle = await window.showDirectoryPicker({ mode: 'readwrite', id: 'emularity-games' });
-    await idb.put('handles', 'diskdir', handle);
+    await this.#idbPut('handles', 'diskdir', handle);
     return handle;
-  },
-  async getDiskDir(createOrPick) {
-    let handle = await idb.get('handles', 'diskdir');
+  }
+  /* The remembered folder, re-requesting permission if needed. With `createOrPick`,
+     prompts for a folder when there is none (or access was refused). */
+  static async getDiskDir(createOrPick) {
+    let handle = await this.#idbGet('handles', 'diskdir');
     if (!handle) return createOrPick ? await this.pickDiskDir() : null;
-    let perm = await handle.queryPermission({ mode: 'readwrite' });
-    if (perm !== 'granted') perm = await handle.requestPermission({ mode: 'readwrite' });
-    if (perm !== 'granted') return createOrPick ? await this.pickDiskDir() : null;
+    // OPFS handles (and some browsers) don't expose queryPermission; those are already granted.
+    if (handle.queryPermission) {
+      let perm = await handle.queryPermission({ mode: 'readwrite' });
+      if (perm !== 'granted' && handle.requestPermission) perm = await handle.requestPermission({ mode: 'readwrite' });
+      if (perm !== 'granted') return createOrPick ? await this.pickDiskDir() : null;
+    }
     return handle;
-  },
-  async diskStream(name, url, onProgress) {
-    let dir = await this.getDiskDir(true), fh = await dir.getFileHandle(name, { create: true }), w = await fh.createWritable();
-    await streamInto(url, chunk => w.write(chunk), onProgress);
-    await w.close();
-  },
-  async diskPut(name, blob) {
-    let dir = await this.getDiskDir(true), fh = await dir.getFileHandle(name, { create: true }), w = await fh.createWritable();
-    await w.write(blob); await w.close();
-  },
-  async diskGet(name) {
-    try { let dir = await this.getDiskDir(false); if (!dir) return null; let fh = await dir.getFileHandle(name); return await fh.getFile(); } catch (e) { return null; }
-  },
-  async diskDelete(name) {
-    try { let dir = await this.getDiskDir(false); if (dir) await dir.removeEntry(name); } catch (e) {}
-  },
-};
+  }
+  static async diskStream(name, url, onProgress) {
+    await this.#streamToFile(await (await this.getDiskDir(true)).getFileHandle(name, { create: true }), url, onProgress);
+  }
+  static async diskPut(name, blob) {
+    await this.#writeToFile(await (await this.getDiskDir(true)).getFileHandle(name, { create: true }), blob);
+  }
+  static async diskGet(name) {
+    try { let dir = await this.getDiskDir(false); return dir ? await (await dir.getFileHandle(name)).getFile() : null; }
+    catch (e) { return null; }
+  }
+  static async diskDelete(name, options) {
+    try { let dir = await this.getDiskDir(false); if (dir) await dir.removeEntry(name, options); } catch (e) {}
+  }
 
-/* Fetch a URL, streaming chunks into `sink(chunk)`; reports (loaded,total) */
-async function streamInto(url, sink, onProgress) {
-  let res = await fetch(url);
-  if (!res.ok) throw new Error('HTTP ' + res.status);
-  let total = +res.headers.get('Content-Length') || 0, reader = res.body.getReader(), loaded = 0;
-  while (true) {
-    let { done, value } = await reader.read();
-    if (done) break;
-    await sink(value);
-    loaded += value.byteLength;
-    if (onProgress) onProgress(loaded, total);
+  /* Write `bytes` to `path` (e.g. "/c/SAVE.DAT") under a directory handle, creating
+     any missing parent directories. */
+  static async writePath(root, path, bytes) {
+    let parts = path.split('/').filter(Boolean), name = parts.pop(), dir = root;
+    for (let p of parts) dir = await dir.getDirectoryHandle(p, { create: true });
+    await this.#writeToFile(await dir.getFileHandle(name, { create: true }), bytes);
+  }
+  /* Remove `path` from under a directory handle, if present. */
+  static async removePath(root, path) {
+    let parts = path.split('/').filter(Boolean), name = parts.pop(), dir = root;
+    for (let p of parts) dir = await dir.getDirectoryHandle(p);
+    await dir.removeEntry(name, { recursive: true });
   }
 }
-/* Fetch a URL into a Blob with progress (used for the IndexedDB fallback) */
-async function fetchBlob(url, onProgress) {
-  let chunks = [];
-  await streamInto(url, c => chunks.push(c), onProgress);
-  return new Blob(chunks);
-}
 
-const SEARCH_ROWS = 50;
+/* Extract a zip (a Blob) into a real directory handle (used by "Install to disk").
 
-async function searchArchive(query, page = 1, rows = SEARCH_ROWS) {
-  let params = new URLSearchParams();
-  params.append('q', query);
-  ['identifier', 'title', 'year', 'avg_rating'].forEach(f => params.append('fl[]', f));
-  params.append('sort[]', 'downloads desc');
-  params.append('rows', String(rows));
-  params.append('page', String(page));
-  params.append('output', 'json');
-  let res = await fetch('https://archive.org/advancedsearch.php?' + params);
-  let data = await res.json();
-  return { docs: data.response.docs, total: data.response.numFound };
-}
+   Designed for large archives (games run to 1.5GB+): nothing ever holds the whole
+   zip — or even a whole file — in memory. We parse only the central directory, then
+   hand each worker the zip Blob (postMessage shares a Blob by reference; the bytes
+   are NOT copied) plus a slice of entries. Each worker slices out just its file's
+   compressed bytes and streams them through DecompressionStream straight into the
+   destination file. Work fans across many workers so the per-file atomic
+   createWritable()/close() (temp-file + fsync + rename on a real folder) pipeline
+   across cores instead of serializing on the main thread. */
+class ZipExtractor {
+  // Tuning knobs, not correctness: how many workers issue writes in parallel, and how
+  // many writes each keeps in flight. On OPFS more of both helps; on a real folder the
+  // browser serializes atomic writes, so it may not move the needle.
+  static WORKERS = 32;
+  static CONCURRENCY = 4;
 
-/* Recover the archive.org identifier from a stored item's download URL */
-function archiveIdFromUrl(url) {
-  if (!url) return null;
-  let m = url.match(/cors\.archive\.org\/cors\/([^\/?#]+)/);
-  return m ? decodeURIComponent(m[1]) : null;
-}
+  // sanitizeName, childHandle, extractEntry and workerMain also run inside the
+  // extraction workers: workerURL() copies their source into the worker script, so
+  // they must stay self-contained (only `this.` references to each other).
 
-/* Human-friendly "time ago" for a timestamp (ms), or "never" if unset */
-function relativeTime(ts) {
-  if (!ts) return 'never';
-  let sec = Math.max(0, Math.round((Date.now() - ts) / 1000));
-  let fmt = (n, u) => n + ' ' + u + (n == 1 ? '' : 's') + ' ago';
-  if (sec < 45) return 'just now';
-  let min = Math.round(sec / 60);
-  if (min < 60) return fmt(min, 'minute');
-  let hr = Math.round(min / 60);
-  if (hr < 24) return fmt(hr, 'hour');
-  let day = Math.round(hr / 24);
-  if (day < 7) return fmt(day, 'day');
-  if (day < 70) return fmt(Math.round(day / 7), 'week');
-  let mo = Math.round(day / 30.44);
-  if (mo < 12) return fmt(mo, 'month');
-  return fmt(Math.round(day / 365.25), 'year');
-}
-
-/* Format a byte count as a human-friendly size (e.g. "4.2 MB") */
-function formatBytes(bytes) {
-  if (bytes == null || !isFinite(bytes) || bytes < 0) return null;
-  if (bytes < 1024) return bytes + ' B';
-  let units = ['KB', 'MB', 'GB', 'TB'], v = bytes / 1024, i = 0;
-  while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
-  return (v < 10 ? v.toFixed(1) : Math.round(v)) + ' ' + units[i];
-}
-
-/* Format an elapsed duration (ms) as M:SS, or H:MM:SS past an hour */
-function formatDuration(ms) {
-  let s = Math.floor(Math.max(0, ms) / 1000);
-  let h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
-  let pad = n => String(n).padStart(2, '0');
-  return (h > 0 ? h + ':' + pad(m) : m) + ':' + pad(sec);
-}
-
-/* The archive.org thumbnail URL for a collection item, if it came from archive.org */
-function itemThumb(item) {
-  if (item.thumb) return item.thumb;
-  let id = item.identifier || archiveIdFromUrl(item.url);
-  return id ? 'https://archive.org/services/img/' + id : null;
-}
-
-/* Given an archive.org identifier, figure out the software file to load and how to start it */
-async function resolveArchiveItem(identifier) {
-  let res = await fetch('https://archive.org/metadata/' + identifier);
-  let data = await res.json();
-  let meta = data.metadata || {};
-  let ext = (meta.emulator_ext || '').toLowerCase();
-  let file = ext ? data.files.find(f => f.name.toLowerCase().endsWith('.' + ext)) : null;
-  if (!file) file = data.files.find(f => /\.(zip|dsk|do|po|nib|woz|img|ima)$/i.test(f.name));
-  if (!file) throw new Error('No usable software file found in this item');
-  return {
-    title: (Array.isArray(meta.title) ? meta.title[0] : meta.title) || identifier,
-    filename: file.name,
-    url: `https://cors.archive.org/cors/${identifier}/${encodeURIComponent(file.name)}`,
-    exe: meta.emulator_start || '',
-    size: file.size != null ? +file.size : undefined,
-  };
-}
-
-/* Convert an archive.org-style start path ('GAMEDIR/GAME.EXE') into autoexec commands */
-function exeToAutoexec(exe) {
-  if (!exe) return '';
-  if (exe.includes('\n') || /^[a-z]:/i.test(exe)) return exe; // already explicit commands
-  let parts = exe.replace(/\\/g, '/').split('/').filter(p => p.length);
-  let prog = parts.pop();
-  let lines = ['c:'];
-  if (parts.length) lines.push('cd \\' + parts.join('\\'));
-  lines.push(prog);
-  return lines.join('\n');
-}
-
-class EmularityCollection extends HTMLElement {
-  connectedCallback() {
-    let stored = {};
-    try { stored = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; } catch (e) {}
-    this.items = stored.items || [];
-    this.platform = PLATFORMS[stored.platform] ? stored.platform : Object.keys(PLATFORMS)[0];
-    this.sort = SORTS[stored.sort] ? stored.sort : 'added-desc';
-    this.muted = !!stored.muted;
-    this.theater = !!stored.theater;
-    audioMute.muted = this.muted;
-    this.playing = false;
-    // Fill in derived/looked-up fields (thumbnail, added date, rating) for items
-    // saved before those existed, then keep enriching in the background.
-    this.backfillItems();
-    // Close any open card menu when clicking elsewhere
-    document.addEventListener('click', () => this.closeMenus());
-    // Drive platform/game selection from the URL hash so views are bookmarkable
-    // and the browser Back button behaves as users expect.
-    window.addEventListener('hashchange', () => this.renderRoute());
-    if (!location.hash) history.replaceState(null, '', '#' + this.platform);
-    this.renderRoute();
-    this.fetchMissingRatings();
-    this.fetchMissingSizes();
+  /* Chrome's local File System Access rejects some names OPFS accepts ("Name is not
+     allowed"), with stricter, not fully documented rules (e.g. a comma). This is the
+     fallback name used only when the browser refuses the original. */
+  static sanitizeName(name) {
+    let s = name.replace(/[^A-Za-z0-9._-]/g, '_').replace(/[. ]+$/, '') || '_';
+    if (/^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\.|$)/i.test(s)) s = '_' + s; // Windows reserved
+    return s;
   }
-  // Derive thumbnail and added-date for older items from what we already have.
-  backfillItems() {
-    let changed = false;
-    for (let item of this.items) {
-      if (!item.thumb) {
-        let id = item.identifier || archiveIdFromUrl(item.url);
-        if (id) { item.identifier = item.identifier || id; item.thumb = 'https://archive.org/services/img/' + id; changed = true; }
-      }
-      if (!item.added) {
-        // item ids look like "sw-<timestamp>-<n>"; recover the creation time
-        let m = /^sw-(\d+)-/.exec(item.id || '');
-        item.added = m ? +m[1] : 0;
-        changed = true;
+  /* Create (or open) a child file/directory, retrying with a sanitized name if the
+     browser refuses the original one. */
+  static async childHandle(dir, name, kind) {
+    let get = n => kind == 'file' ? dir.getFileHandle(n, { create: true }) : dir.getDirectoryHandle(n, { create: true });
+    try { return await get(name); }
+    catch (e) {
+      let alt = this.sanitizeName(name);
+      if (alt === name) alt = '_' + name; // refused a name the sanitizer keeps as-is (e.g. desktop.ini)
+      try {
+        let h = await get(alt);
+        console.warn('Emularity: ' + kind + ' name ' + JSON.stringify(name) + ' refused, wrote as ' + JSON.stringify(alt));
+        return h;
+      } catch (e2) {
+        console.error('Emularity: ' + kind + ' name ' + JSON.stringify(name) + ' refused, and so was ' + JSON.stringify(alt), e2);
+        throw e;
       }
     }
-    if (changed) this.save();
   }
-  // Look up archive.org ratings for archive-sourced items that don't have one yet.
-  // avg_rating is only exposed by the advancedsearch API, so batch-query all the
-  // missing identifiers at once (client-side, same API as search).
-  async fetchMissingRatings() {
-    let pending = this.items.filter(i => i.rating === undefined)
-      .map(i => ({ item: i, id: i.identifier || archiveIdFromUrl(i.url) }))
-      .filter(p => p.id);
-    if (!pending.length) return;
+  /* Stream one entry's compressed bytes -> inflate -> file */
+  static async extractEntry(blob, en) {
+    // The central directory points at the local header, whose name/extra lengths can
+    // differ from the central record, so read them here to find where data begins.
+    let lh = new DataView(await blob.slice(en.localOffset, en.localOffset + 30).arrayBuffer());
+    let dataStart = en.localOffset + 30 + lh.getUint16(26, true) + lh.getUint16(28, true);
+    let src = blob.slice(dataStart, dataStart + en.compSize);
+    let writable = await (await this.childHandle(en.dir, en.name, 'file')).createWritable();
+    if (en.method === 0) await src.stream().pipeTo(writable);                                      // stored
+    else await src.stream().pipeThrough(new DecompressionStream('deflate-raw')).pipeTo(writable);  // deflate
+  }
+  static async workerMain(e) {
+    let { blob, entries, conc } = e.data;
+    let i = 0, failed = false;
+    let run = async () => {
+      while (i < entries.length && !failed) {
+        let en = entries[i++];
+        try { await this.extractEntry(blob, en); postMessage({ done: 1 }); }
+        catch (err) { failed = true; postMessage({ error: String((err && err.message) || err) }); return; }
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(conc, entries.length) }, run));
+    if (!failed) postMessage({ finished: true });
+  }
+  static #workerURL = null;
+  static workerURL() {
+    if (!this.#workerURL) {
+      let src = `const ZipExtractor = { ${this.sanitizeName}, ${this.childHandle}, ${this.extractEntry}, ${this.workerMain} };\n` +
+                `onmessage = e => ZipExtractor.workerMain(e);`;
+      this.#workerURL = URL.createObjectURL(new Blob([src], { type: 'text/javascript' }));
+    }
+    return this.#workerURL;
+  }
+
+  /* Parse a zip's central directory (reading only the tail + directory, never the file
+     data). Returns [{ name, method, compSize, uncompSize, localOffset }]. Handles ZIP64
+     so archives over 4GB / 65535 entries work. */
+  static async parseEntries(blob) {
+    let size = blob.size;
+    let u64 = (dv, o) => Number(dv.getBigUint64(o, true));
+    let tailLen = Math.min(size, 65557); // max EOCD comment (65535) + EOCD (22)
+    let tail = new DataView(await blob.slice(size - tailLen).arrayBuffer());
+    let eo = -1;
+    for (let i = tail.byteLength - 22; i >= 0; i--) { if (tail.getUint32(i, true) === 0x06054b50) { eo = i; break; } }
+    if (eo < 0) throw new Error('Not a zip file (end-of-central-directory not found)');
+    let cdCount = tail.getUint16(eo + 10, true);
+    let cdSize = tail.getUint32(eo + 12, true);
+    let cdOffset = tail.getUint32(eo + 16, true);
+    if (cdOffset === 0xffffffff || cdCount === 0xffff || cdSize === 0xffffffff) { // ZIP64
+      let locOff = eo - 20;
+      if (locOff >= 0 && tail.getUint32(locOff, true) === 0x07064b50) {
+        let z64Off = u64(tail, locOff + 8);
+        let z = new DataView(await blob.slice(z64Off, z64Off + 56).arrayBuffer());
+        if (z.getUint32(0, true) === 0x06064b50) { cdCount = u64(z, 32); cdSize = u64(z, 40); cdOffset = u64(z, 48); }
+      }
+    }
+    let cdBuf = await blob.slice(cdOffset, cdOffset + cdSize).arrayBuffer();
+    let cd = new DataView(cdBuf), dec = new TextDecoder('utf-8');
+    let entries = [], p = 0;
+    for (let n = 0; n < cdCount && p + 46 <= cdBuf.byteLength; n++) {
+      if (cd.getUint32(p, true) !== 0x02014b50) break;
+      let method = cd.getUint16(p + 10, true);
+      let compSize = cd.getUint32(p + 20, true);
+      let uncompSize = cd.getUint32(p + 24, true);
+      let nameLen = cd.getUint16(p + 28, true);
+      let extraLen = cd.getUint16(p + 30, true);
+      let commentLen = cd.getUint16(p + 32, true);
+      let localOffset = cd.getUint32(p + 42, true);
+      let name = dec.decode(new Uint8Array(cdBuf, p + 46, nameLen));
+      if (compSize === 0xffffffff || uncompSize === 0xffffffff || localOffset === 0xffffffff) { // ZIP64 extra
+        let ep = p + 46 + nameLen, eend = ep + extraLen;
+        while (ep + 4 <= eend) {
+          let id = cd.getUint16(ep, true), sz = cd.getUint16(ep + 2, true), q = ep + 4;
+          if (id === 0x0001) {
+            if (uncompSize === 0xffffffff) { uncompSize = u64(cd, q); q += 8; }
+            if (compSize === 0xffffffff) { compSize = u64(cd, q); q += 8; }
+            if (localOffset === 0xffffffff) { localOffset = u64(cd, q); q += 8; }
+            break;
+          }
+          ep += 4 + sz;
+        }
+      }
+      entries.push({ name, method, compSize, uncompSize, localOffset });
+      p += 46 + nameLen + extraLen + commentLen;
+    }
+    return entries;
+  }
+
+  /* Normalize + sanitize a zip entry path for File System Access: (1) some archives
+     (especially DOS-era ones) use backslashes as path separators, which FSA rejects as
+     invalid name characters; (2) a component can contain characters that are illegal
+     filenames on Windows/macOS, and FSA enforces the strictest rules regardless of the
+     current OS. Returns a clean "a/b/c" path, or '' if nothing survives. */
+  static sanitizePath(name) {
+    return name
+      .replace(/\\/g, '/')                          // backslashes are path separators
+      .split('/')
+      .map(seg => seg
+        .replace(/[<>:"|?*\x00-\x1f]/g, '_')         // characters illegal on major OSes
+        .replace(/[. ]+$/, ''))                      // Windows drops trailing dots/spaces
+      .filter(seg => seg && seg !== '.' && seg !== '..')
+      .join('/');
+  }
+
+  static async extractTo(zipBlob, destDir, onProgress) {
+    let entries = await this.parseEntries(zipBlob);
+    for (let e of entries) { e.isDir = /[\/\\]$/.test(e.name); e.path = this.sanitizePath(e.name); }
+
+    // Pre-create every directory (from both explicit dir entries and file parents) so
+    // concurrent writes never race on directory creation. Cached by the original path
+    // so files still resolve their parent even if a name had to be sanitized on disk.
+    let dirs = new Map([['', destDir]]);
+    let dirKeys = new Set();
+    for (let e of entries) {
+      if (!e.path) continue;
+      let parts = e.path.split('/');
+      if (!e.isDir) parts.pop(); // a file's parent chain
+      for (let i = 1; i <= parts.length; i++) dirKeys.add(parts.slice(0, i).join('/'));
+    }
+    for (let key of [...dirKeys].sort()) { // sorted, so parents come before children
+      let slash = key.lastIndexOf('/');
+      dirs.set(key, await this.childHandle(dirs.get(key.slice(0, Math.max(slash, 0))), key.slice(slash + 1), 'directory'));
+    }
+
+    // One task per actual file, resolved to its parent handle + basename so workers
+    // only call getFileHandle/createWritable.
+    let tasks = [];
+    for (let e of entries) {
+      if (e.isDir || !e.path) continue;
+      let parts = e.path.split('/'), name = parts.pop();
+      tasks.push({ dir: dirs.get(parts.join('/')), name, method: e.method, compSize: e.compSize, localOffset: e.localOffset });
+    }
+    if (!tasks.length) return;
+
+    let t0 = performance.now(), done = 0;
+    let nw = Math.min(this.WORKERS, tasks.length);
+    // Round-robin partition so every worker gets a similar file count.
+    let groups = Array.from({ length: nw }, () => []);
+    tasks.forEach((t, i) => groups[i % nw].push(t));
+    let workers = groups.map(() => new Worker(this.workerURL()));
     try {
-      let q = 'identifier:(' + pending.map(p => p.id).join(' OR ') + ')';
-      let params = new URLSearchParams();
-      params.append('q', q);
-      ['identifier', 'avg_rating'].forEach(f => params.append('fl[]', f));
-      params.append('rows', String(pending.length));
-      params.append('output', 'json');
-      let res = await fetch('https://archive.org/advancedsearch.php?' + params);
-      let ratings = {};
-      (await res.json()).response.docs.forEach(d => { ratings[d.identifier] = d.avg_rating != null ? +d.avg_rating : 0; });
-      pending.forEach(p => { p.item.rating = ratings[p.id] != null ? ratings[p.id] : 0; });
-    } catch (e) {
-      console.error('Failed to fetch ratings', e);
-      pending.forEach(p => { p.item.rating = 0; }); // don't retry endlessly
+      await Promise.all(workers.map((wk, gi) => new Promise((resolve, reject) => {
+        wk.onerror = ev => reject(new Error('worker error: ' + (ev.message || 'unknown')));
+        wk.onmessage = e => {
+          if (e.data.done) { if (onProgress) onProgress(++done, tasks.length); }
+          else if (e.data.error) reject(new Error(e.data.error));
+          else if (e.data.finished) resolve();
+        };
+        wk.postMessage({ blob: zipBlob, entries: groups[gi], conc: this.CONCURRENCY });
+      })));
+    } finally {
+      workers.forEach(w => w.terminate());
     }
-    this.save();
-    if (!this.playing) this.renderGrid();
+    console.log('Emularity: extracted ' + tasks.length + ' files in ' + Math.round(performance.now() - t0) + 'ms (' + nw + ' workers)');
   }
-  // Fill in the download size for one item via a HEAD request (Content-Length is a
-  // CORS-safelisted header, so it's readable cross-origin).
-  async fetchSize(item) {
-    if (item.size != null || !item.url) return;
-    try {
-      let res = await fetch(item.url, { method: 'HEAD' });
-      let len = res.headers.get('Content-Length');
-      if (len) { item.size = +len; this.save(); if (!this.playing) this.renderGrid(); }
-    } catch (e) { /* leave size unknown */ }
-  }
-  // Backfill sizes for items that don't have one yet.
-  async fetchMissingSizes() {
-    for (let item of this.items) {
-      if (item.size != null) continue;
-      if (item.url) {
-        await this.fetchSize(item);
-      } else if (item.source == 'upload') {
-        try { let blob = await filedb.get(item.id); if (blob) { item.size = blob.size; this.save(); if (!this.playing) this.renderGrid(); } } catch (e) {}
+}
+
+/* Master mute. Routes every emulator's audio through gain nodes we can silence,
+   installed globally so it catches audio graphs built after a game boots. Uses a
+   gain (not AudioContext.suspend) so the audio callback keeps firing and emulator
+   timing is unaffected. */
+class AudioMute {
+  static #gains = [];
+  static muted = false;
+
+  static install() {
+    let orig = AudioNode.prototype.connect, gains = this.#gains, self = this;
+    AudioNode.prototype.connect = function(target, ...rest) {
+      if (target instanceof AudioDestinationNode) {
+        try {
+          let gain = this.context.createGain();
+          gain.gain.value = self.muted ? 0 : 1;
+          gains.push(gain);
+          orig.call(this, gain);
+          return orig.call(gain, target);
+        } catch (e) { /* fall through to a plain connect */ }
       }
-    }
-  }
-  // Routes: #<platform> shows that platform's library; #play/<itemId> plays a game.
-  renderRoute() {
-    let hash = decodeURIComponent(location.hash.replace(/^#/, ''));
-    let slash = hash.indexOf('/');
-    let head = slash >= 0 ? hash.slice(0, slash) : hash;
-    let rest = slash >= 0 ? hash.slice(slash + 1) : '';
-
-    if (head == 'play' && rest) {
-      let item = this.items.find(i => i.id == rest);
-      if (item) {
-        if (this.playing) return; // a player is already showing
-        this.platform = item.platform;
-        this.playing = true;
-        this.play(item);
-        return;
-      }
-      // unknown game id falls through to the library below
-    }
-
-    // Library route. Leaving a running emulator requires a reload (emscripten
-    // runtimes don't tear down cleanly); the hash is already updated, so we just
-    // reload and re-render the library from scratch.
-    if (this.playing) { location.reload(); return; }
-    if (PLATFORMS[head]) this.platform = head;
-    if (this.querySelector('.platform-tabs')) {
-      this.renderTabs();
-      this.renderGrid();
-    } else {
-      this.render();
-    }
-    this.save();
-  }
-  save() {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ platform: this.platform, sort: this.sort, muted: this.muted, theater: this.theater, items: this.items }));
-    } catch (e) {
-      console.error('Failed to save collection', e);
-    }
-  }
-  render() {
-    this.innerHTML = `
-      <header>
-        <img src="../logos/emularity-transparent.png" alt="Emularity">
-        <p>Your personal software collection. Pick a platform, add software, click to play.</p>
-      </header>
-      <div class="platform-tabs"></div>
-      <div class="sort-bar"></div>
-      <div class="game-grid"></div>
-      <p class="empty-note" style="display: none">No software installed for this platform yet. Click "Add software" to get started.</p>
-    `;
-    this.renderTabs();
-    this.renderSortBar();
-    this.renderGrid();
-    this.buildDialog();
-    this.buildEditDialog();
-  }
-  renderTabs() {
-    let tabs = this.querySelector('.platform-tabs');
-    tabs.innerHTML = '';
-    for (let key in PLATFORMS) {
-      let btn = document.createElement('button');
-      btn.innerHTML = '<span class="label"></span><span class="sublabel"></span>';
-      btn.querySelector('.label').textContent = PLATFORMS[key].label;
-      btn.querySelector('.sublabel').textContent = PLATFORMS[key].sublabel;
-      if (key == this.platform) btn.classList.add('active');
-      btn.addEventListener('click', () => { location.hash = key; });
-      tabs.appendChild(btn);
-    }
-  }
-  renderSortBar() {
-    let bar = this.querySelector('.sort-bar');
-    bar.innerHTML = '<label>Sort by <select class="sort-select"></select></label>';
-    let sel = bar.querySelector('.sort-select');
-    for (let key in SORTS) {
-      let opt = document.createElement('option');
-      opt.value = key;
-      opt.textContent = SORTS[key].label;
-      if (key == this.sort) opt.selected = true;
-      sel.appendChild(opt);
-    }
-    sel.addEventListener('change', () => {
-      this.sort = sel.value;
-      this.save();
-      this.renderGrid();
-    });
-  }
-  renderGrid() {
-    if (this.querySelector('.sort-bar')) this.renderSortBar();
-    let grid = this.querySelector('.game-grid');
-    grid.innerHTML = '';
-    let items = this.items.filter(item => item.platform == this.platform);
-    items.sort((SORTS[this.sort] || SORTS['added-desc']).cmp);
-    items.forEach(item => {
-      let card = document.createElement('div');
-      card.className = 'game-card';
-      card.dataset.id = item.id;
-      card.innerHTML = `
-        <img class="game-thumb" loading="lazy">
-        <div class="game-info">
-          <span class="game-title"></span>
-          <span class="game-detail"></span>
-          <span class="game-lastplayed"></span>
-          <span class="game-storage"></span>
-        </div>
-        <button class="game-menu" title="More options">⋮</button>
-        <div class="game-menu-popup">
-          <button class="menu-edit">✎ Edit info</button>
-          <button class="menu-cache"></button>
-          <button class="menu-clone"></button>
-          <button class="menu-reset">⟲ Reset saved data</button>
-          <button class="menu-delete">✕ Remove from collection</button>
-        </div>
-        <div class="game-progress"><div class="game-progress-fill"></div></div>`;
-      let thumb = itemThumb(item), img = card.querySelector('.game-thumb');
-      if (thumb) { img.src = thumb; img.addEventListener('error', () => img.remove()); }
-      else img.remove();
-      card.querySelector('.game-title').textContent = item.title;
-      let detail = item.source == 'upload' ? item.filename + ' (uploaded)' : item.filename;
-      let sizeStr = formatBytes(item.size);
-      if (sizeStr) detail += ' · ' + sizeStr;
-      card.querySelector('.game-detail').textContent = detail;
-      card.querySelector('.game-lastplayed').textContent = item.lastPlayed ? 'Played ' + relativeTime(item.lastPlayed) : 'Never played';
-      card.querySelector('.game-storage').textContent = item.cloned ? '💾 On disk' : (item.cached ? '📥 Cached on device' : '');
-      card.addEventListener('click', () => { location.hash = 'play/' + item.id; });
-
-      let popup = card.querySelector('.game-menu-popup');
-      card.querySelector('.game-menu').addEventListener('click', ev => {
-        ev.stopPropagation();
-        let wasOpen = popup.classList.contains('open');
-        this.closeMenus();
-        if (!wasOpen) popup.classList.add('open');
-      });
-      popup.addEventListener('click', ev => ev.stopPropagation());
-      card.querySelector('.menu-edit').addEventListener('click', () => { this.closeMenus(); this.editItem(item); });
-
-      let cacheBtn = card.querySelector('.menu-cache');
-      cacheBtn.textContent = item.cached ? '📥 Remove from device' : '📥 Cache on device';
-      cacheBtn.addEventListener('click', () => { this.closeMenus(); item.cached ? this.uncacheItem(item) : this.cacheItem(item); });
-
-      let cloneBtn = card.querySelector('.menu-clone');
-      if (localStore.supportsDisk()) {
-        cloneBtn.textContent = item.cloned ? '💾 Remove disk clone' : '💾 Clone to disk…';
-        cloneBtn.addEventListener('click', () => { this.closeMenus(); item.cloned ? this.uncloneItem(item) : this.cloneItem(item); });
-      } else {
-        cloneBtn.remove();
-      }
-
-      card.querySelector('.menu-reset').addEventListener('click', () => { this.closeMenus(); this.resetSaves(item); });
-      card.querySelector('.menu-delete').addEventListener('click', () => { this.closeMenus(); this.remove(item); });
-      grid.appendChild(card);
-    });
-
-    let addcard = document.createElement('div');
-    addcard.className = 'game-card add-card';
-    addcard.textContent = '+ Add software';
-    addcard.addEventListener('click', () => this.openDialog());
-    grid.appendChild(addcard);
-
-    this.querySelector('.empty-note').style.display = items.length ? 'none' : 'block';
-    this.querySelector('.sort-bar').style.display = items.length ? '' : 'none';
-  }
-  // Progress indicator drawn on the item's own card: a fill bar at the bottom and
-  // a status line in place of the storage badge. Cleared by the next renderGrid().
-  cardProgress(item, label) {
-    let card = this.querySelector(`.game-card[data-id="${CSS.escape(item.id)}"]`);
-    let fill = card && card.querySelector('.game-progress-fill');
-    let statusEl = card && card.querySelector('.game-storage');
-    if (card) card.classList.add('busy');
-    if (statusEl) statusEl.textContent = label + '…';
-    return (loaded, total) => {
-      let pct = total ? Math.round(loaded / total * 100) : null;
-      if (fill) fill.style.width = (pct != null ? pct : 100) + '%';
-      if (statusEl) statusEl.textContent = label + (pct != null ? ' ' + pct + '%' : ' ' + formatBytes(loaded));
+      return orig.call(this, target, ...rest);
     };
   }
-  diskNameFor(item) {
-    let ext = (item.filename.match(/\.[a-z0-9]+$/i) || [''])[0];
-    return (item.title.replace(/[^a-z0-9 ._-]/gi, '_').trim() || item.id) + ext;
+  static set(muted) {
+    this.muted = muted;
+    this.#gains.forEach(g => { try { g.gain.value = muted ? 0 : 1; } catch (e) {} });
   }
-  async cacheItem(item) {
-    if (item.size && !confirm(`Cache "${item.title}" (${formatBytes(item.size)}) on this device for instant, offline play?`)) return;
-    let onProgress = this.cardProgress(item, 'Caching');
-    try {
-      if (navigator.storage && navigator.storage.persist) navigator.storage.persist();
-      if (item.source == 'upload') { let blob = await filedb.get(item.id); await localStore.cachePut(item.id, blob); }
-      else { await localStore.cacheStream(item.id, item.url, onProgress); }
-      item.cached = true; this.save();
-    } catch (e) { console.error(e); alert('Failed to cache on device: ' + e.message); }
-    finally { this.renderGrid(); }
+}
+AudioMute.install();
+
+
+/* ===== Collection items =====
+
+   One element per title in the collection, which doubles as its card in the grid.
+   It owns the title's stored record (the JSON persisted by the collection) and
+   everything you can do with it: local copies, installing, resetting saves, and
+   building the emulator that plays it. Each platform is a subclass, registered
+   under its own tag; its static fields describe the platform to the rest of the UI.
+
+   Items report back to the collection with (non-bubbling) events dispatched on
+   themselves, so they work whether or not they're currently in the grid:
+     itemchange  the record changed and should be saved
+     itemedit    the user asked to edit the item's info
+     itemremove  the item was removed from the collection
+     menuopen    this item's menu opened (others should close) */
+class CollectionItem extends HTMLElement {
+  static platforms = {}; // platform key -> item class, in tab order
+
+  // Platform description, overridden by each subclass
+  static key = null;
+  static label = '';
+  static sublabel = '';
+  static query = '';        // archive.org search filter for this platform's software
+  static accept = '';       // file types for the upload picker
+  static hint = '';         // what kind of file the platform wants
+  static exeField = false;  // whether titles have a "program to run"
+  static captureMouseField = false; // whether titles can capture the mouse on click
+  static onscreenKeyboard = true;
+
+  static register(tag) {
+    CollectionItem.platforms[this.key] = this;
+    customElements.define(tag, this);
   }
-  async uncacheItem(item) {
-    await localStore.cacheDelete(item.id);
-    item.cached = false; this.save(); this.renderGrid();
-  }
-  async cloneItem(item) {
-    let diskName = this.diskNameFor(item);
-    let onProgress = this.cardProgress(item, 'Cloning to disk');
-    try {
-      if (item.source == 'upload') { let blob = await filedb.get(item.id); await localStore.diskPut(diskName, blob); }
-      else { await localStore.diskStream(diskName, item.url, onProgress); }
-      item.cloned = true; item.diskName = diskName; this.save();
-    } catch (e) {
-      if (e.name != 'AbortError') { console.error(e); alert('Failed to clone to disk: ' + e.message); }
-    } finally { this.renderGrid(); }
-  }
-  async uncloneItem(item) {
-    if (!confirm(`Delete the on-disk copy of "${item.title}"? This removes the real file from your folder.`)) return;
-    if (item.diskName) await localStore.diskDelete(item.diskName);
-    item.cloned = false; item.diskName = undefined; this.save(); this.renderGrid();
-  }
-  closeMenus() {
-    this.querySelectorAll('.game-menu-popup.open').forEach(p => p.classList.remove('open'));
-  }
-  buildEditDialog() {
-    let dialog = document.createElement('dialog');
-    dialog.className = 'edit-dialog';
-    dialog.innerHTML = `
-      <button class="close-dialog" title="Close">✕</button>
-      <h3>Edit software</h3>
-      <label>Title <input type="text" name="edit-title"></label>
-      <label class="edit-exe-field">Program to run <input type="text" name="edit-exe" placeholder="GAMEDIR/GAME.EXE"></label>
-      <label class="edit-url-field">URL <input type="url" name="edit-url"></label>
-      <label>Thumbnail URL <input type="url" name="edit-thumb" placeholder="https://archive.org/services/img/..."></label>
-      <button class="primary edit-save">Save changes</button>
-    `;
-    this.appendChild(dialog);
-    this.editDialog = dialog;
-    dialog.querySelector('.close-dialog').addEventListener('click', () => dialog.close());
-    dialog.querySelector('.edit-save').addEventListener('click', () => this.saveEdit());
-  }
-  editItem(item) {
-    this.editing = item;
-    let d = this.editDialog, platform = PLATFORMS[item.platform];
-    d.querySelector('[name="edit-title"]').value = item.title || '';
-    d.querySelector('[name="edit-exe"]').value = item.exe || '';
-    d.querySelector('[name="edit-url"]').value = item.url || '';
-    d.querySelector('[name="edit-thumb"]').value = item.thumb || '';
-    d.querySelector('.edit-exe-field').style.display = platform && platform.exeField ? '' : 'none';
-    d.querySelector('.edit-url-field').style.display = item.source == 'url' ? '' : 'none';
-    d.showModal();
-  }
-  saveEdit() {
-    let item = this.editing, d = this.editDialog;
-    if (!item) return;
-    item.title = d.querySelector('[name="edit-title"]').value.trim() || item.title;
-    item.exe = d.querySelector('[name="edit-exe"]').value.trim();
-    if (item.source == 'url') item.url = d.querySelector('[name="edit-url"]').value.trim() || item.url;
-    item.thumb = d.querySelector('[name="edit-thumb"]').value.trim() || undefined;
-    this.save();
-    this.renderGrid();
-    d.close();
-  }
-  add(item) {
-    item.id = 'sw-' + Date.now() + '-' + this.items.length;
-    item.platform = this.platform;
-    item.added = Date.now();
-    this.items.push(item);
-    this.save();
-    this.renderGrid();
+  /* Create the item element for a stored record */
+  static fromRecord(record) {
+    let cls = CollectionItem.platforms[record.platform];
+    if (!cls) return null;
+    let item = new cls();
+    item.record = record;
     return item;
   }
-  async resetSaves(item) {
-    if (!confirm(`Reset saved data for "${item.title}"? Saves, high scores, and settings written by this title will be permanently erased. The software itself stays in your collection.`)) return;
+
+  record = null;
+
+  get archiveId() { return this.record.identifier || ArchiveOrg.idFromUrl(this.record.url); }
+  get thumb() {
+    let id = this.archiveId;
+    return this.record.thumb || (id ? ArchiveOrg.thumbUrl(id) : null);
+  }
+  // IndexedDB store for the title's writes (saves, high scores, NVRAM), one per title
+  // so titles sharing a mountpoint can't contaminate each other.
+  get persistStore() { return 'collection-' + this.record.id; }
+  // File name for an on-disk copy: the title with only safe filename characters (and
+  // no trailing dots/spaces, which Windows/FSA reject), plus the original extension.
+  get diskName() {
+    let r = this.record;
+    let ext = ((r.filename || '').match(/\.[a-z0-9]+$/i) || [''])[0];
+    let base = r.title.replace(/[^a-z0-9 ._-]/gi, '_').replace(/[. ]+$/, '').trim() || r.id;
+    return base + ext;
+  }
+  get hasLocalCopy() {
+    let r = this.record;
+    return !!((r.cloned && r.diskName) || r.cached || r.source == 'upload');
+  }
+  get storageLabel() {
+    let r = this.record;
+    return r.installed ? '🖴 Installed to disk' : r.cloned ? '💾 On disk' : r.cached ? '📥 Cached on device' : '';
+  }
+  canInstall() { return false; }
+
+  /* Fill in fields that older saved records lack. Returns true if anything changed. */
+  normalize() {
+    let r = this.record, changed = false;
+    if (!r.thumb) {
+      let id = this.archiveId;
+      if (id) { r.identifier = r.identifier || id; r.thumb = ArchiveOrg.thumbUrl(id); changed = true; }
+    }
+    if (r.added == null) {
+      // ids look like "sw-<timestamp>-<n>"; recover the creation time
+      let m = /^sw-(\d+)-/.exec(r.id || '');
+      r.added = m ? +m[1] : 0;
+      changed = true;
+    }
+    return changed;
+  }
+  update(fields) {
+    Object.assign(this.record, fields);
+    this.render();
+    this.emit('itemchange');
+  }
+  emit(type) {
+    this.dispatchEvent(new CustomEvent(type));
+  }
+
+  /* ----- Card ----- */
+
+  connectedCallback() {
+    if (this.built) return; // reordering the grid re-connects us; build only once
+    this.built = true;
+    this.classList.add('game-card');
+    this.innerHTML = `
+      <div class="game-info">
+        <span class="game-title"></span>
+        <span class="game-detail"></span>
+        <span class="game-lastplayed"></span>
+        <span class="game-storage"></span>
+      </div>
+      <button class="game-menu" title="More options">⋮</button>
+      <div class="game-menu-popup"></div>
+      <div class="game-progress"><div class="game-progress-fill"></div></div>`;
+    this.addEventListener('click', () => this.launch());
+    this.querySelector('.game-menu').addEventListener('click', ev => {
+      ev.stopPropagation();
+      if (this.menuOpen) this.closeMenu();
+      else { this.emit('menuopen'); this.querySelector('.game-menu-popup').classList.add('open'); }
+    });
+    this.querySelector('.game-menu-popup').addEventListener('click', ev => ev.stopPropagation());
+    this.render();
+  }
+  get menuOpen() { return this.querySelector('.game-menu-popup')?.classList.contains('open'); }
+  closeMenu() { this.querySelector('.game-menu-popup')?.classList.remove('open'); }
+
+  render() {
+    if (!this.built) return;
+    let r = this.record;
+    this.dataset.id = r.id;
+    this.activeProgress = null; // drop updates still queued from a finished operation
+    this.classList.remove('busy');
+    this.querySelector('.game-progress-fill').style.transform = '';
+
+    let thumb = this.thumb;
+    if (thumb !== this.shownThumb) {
+      this.shownThumb = thumb;
+      this.querySelector('.game-thumb')?.remove();
+      if (thumb) {
+        let img = document.createElement('img');
+        img.className = 'game-thumb';
+        img.loading = 'lazy';
+        img.src = thumb;
+        img.addEventListener('error', () => img.remove());
+        this.prepend(img);
+      }
+    }
+    this.querySelector('.game-title').textContent = r.title;
+    let detail = r.source == 'upload' ? r.filename + ' (uploaded)' : r.filename;
+    let size = Format.bytes(r.size);
+    this.querySelector('.game-detail').textContent = size ? detail + ' · ' + size : detail;
+    this.querySelector('.game-lastplayed').textContent = r.lastPlayed ? 'Played ' + Format.relativeTime(r.lastPlayed) : 'Never played';
+    this.querySelector('.game-storage').textContent = this.storageLabel;
+
+    let popup = this.querySelector('.game-menu-popup');
+    popup.replaceChildren(...this.menuActions().map(([cls, label, action]) => {
+      let btn = document.createElement('button');
+      btn.className = cls;
+      btn.textContent = label;
+      btn.addEventListener('click', () => { this.closeMenu(); action(); });
+      return btn;
+    }));
+  }
+  /* [className, label, action] for each entry in the card's menu */
+  menuActions() {
+    let r = this.record, disk = LocalStore.supportsDisk(), actions = [];
+    actions.push(['menu-edit', '✎ Edit info', () => this.emit('itemedit')]);
+    if (disk && this.canInstall()) {
+      actions.push(['menu-install', r.installed ? '🖴 Uninstall from disk' : '🖴 Install to disk…', () => r.installed ? this.uninstall() : this.install()]);
+    }
+    actions.push(['menu-cache', r.cached ? '📥 Remove from device' : '📥 Cache on device', () => r.cached ? this.uncache() : this.cache()]);
+    if (disk) {
+      actions.push(['menu-clone', r.cloned ? '💾 Remove disk clone' : '💾 Clone to disk…', () => r.cloned ? this.unclone() : this.clone()]);
+    }
+    actions.push(['menu-reset', '⟲ Reset saved data', () => this.resetSaves()]);
+    actions.push(['menu-delete', '✕ Remove from collection', () => this.removeFromCollection()]);
+    return actions;
+  }
+
+  /* Show progress on the card: a fill bar at the bottom and a status line in place of
+     the storage badge, until the next render() or progress(). Returns an onProgress(loaded, total).
+     A fast operation can report hundreds of times per frame (once per extracted file),
+     so updates are coalesced to one per animation frame and only touch the DOM when the
+     visible value changes. */
+  progress(label) {
+    let token = this.activeProgress = {};
+    let fill = this.querySelector('.game-progress-fill'), status = this.querySelector('.game-storage');
+    this.classList.add('busy');
+    status.textContent = label + '…';
+    let pending = null, scheduled = false, lastPct = -1, lastText = null;
+    let flush = () => {
+      scheduled = false;
+      if (this.activeProgress !== token) return;
+      let pct = pending.total ? Math.round(pending.loaded / pending.total * 100) : null;
+      if (pct !== lastPct) { fill.style.transform = 'scaleX(' + (pct != null ? pct / 100 : 1) + ')'; lastPct = pct; }
+      let text = label + (pct != null ? ' ' + pct + '%' : ' ' + Format.bytes(pending.loaded));
+      if (text !== lastText) { status.textContent = text; lastText = text; }
+    };
+    return (loaded, total) => {
+      pending = { loaded, total };
+      if (!scheduled) { scheduled = true; requestAnimationFrame(flush); }
+    };
+  }
+
+  /* ----- Software data ----- */
+
+  /* Fill in the download size via a HEAD request (Content-Length is a CORS-safelisted
+     header, so it's readable cross-origin), or from the uploaded file. */
+  async fetchSize() {
+    let r = this.record;
+    if (r.size != null) return;
+    try {
+      if (r.url) {
+        let len = (await fetch(r.url, { method: 'HEAD' })).headers.get('Content-Length');
+        if (len) this.update({ size: +len });
+      } else if (r.source == 'upload') {
+        let blob = await LocalStore.uploadGet(r.id);
+        if (blob) this.update({ size: blob.size });
+      }
+    } catch (e) { /* leave size unknown */ }
+  }
+  /* The best local copy of the software (on-disk clone, device cache, then upload) */
+  async localCopy() {
+    let r = this.record, blob = null;
+    if (r.cloned && r.diskName) blob = await LocalStore.diskGet(r.diskName);
+    if (!blob && r.cached) blob = await LocalStore.cacheGet(r.id);
+    if (!blob && r.source == 'upload') blob = await LocalStore.uploadGet(r.id);
+    return blob;
+  }
+  /* The software as a Blob, only hitting the network as a last resort */
+  async fetchBlob(onProgress) {
+    return (await this.localCopy()) || await LocalStore.fetchBlob(this.record.url, onProgress);
+  }
+  /* The software to boot: a local copy as a Blob, or null to use the remote URL */
+  async media() {
+    let blob = await this.localCopy();
+    if (!blob && this.record.source == 'upload') throw new Error('The uploaded file for this title is missing from browser storage. Remove it and add it again.');
+    return blob;
+  }
+  async mediaURL() {
+    let blob = await this.media();
+    return blob ? URL.createObjectURL(blob) : this.record.url;
+  }
+
+  /* ----- Menu actions ----- */
+
+  async cache() {
+    let r = this.record;
+    if (r.size && !confirm(`Cache "${r.title}" (${Format.bytes(r.size)}) on this device for instant, offline play?`)) return;
+    let onProgress = this.progress('Caching');
+    try {
+      if (navigator.storage && navigator.storage.persist) navigator.storage.persist();
+      if (r.source == 'upload') await LocalStore.cachePut(r.id, await LocalStore.uploadGet(r.id));
+      else await LocalStore.cacheStream(r.id, r.url, onProgress);
+      this.update({ cached: true });
+    } catch (e) {
+      console.error(e);
+      alert('Failed to cache on device: ' + e.message);
+      this.render();
+    }
+  }
+  async uncache() {
+    await LocalStore.cacheDelete(this.record.id);
+    this.update({ cached: false });
+  }
+  async clone() {
+    let r = this.record, diskName = this.diskName;
+    let onProgress = this.progress('Cloning to disk');
+    try {
+      if (r.source == 'upload') await LocalStore.diskPut(diskName, await LocalStore.uploadGet(r.id));
+      else await LocalStore.diskStream(diskName, r.url, onProgress);
+      this.update({ cloned: true, diskName });
+    } catch (e) {
+      if (e.name != 'AbortError') { console.error(e); alert('Failed to clone to disk: ' + e.message); }
+      this.render();
+    }
+  }
+  async unclone() {
+    let r = this.record;
+    if (!confirm(`Delete the on-disk copy of "${r.title}"? This removes the real file from your folder.`)) return;
+    if (r.diskName) await LocalStore.diskDelete(r.diskName);
+    this.update({ cloned: false, diskName: undefined });
+  }
+  async resetSaves() {
+    if (!confirm(`Reset saved data for "${this.record.title}"? Saves, high scores, and settings written by this title will be permanently erased. The software itself stays in your collection.`)) return;
     await new Promise((resolve, reject) => {
-      let req = indexedDB.deleteDatabase('collection-' + item.id);
+      let req = indexedDB.deleteDatabase(this.persistStore);
       req.onsuccess = resolve;
       req.onblocked = resolve; // nothing holds the db open in the library view
       req.onerror = () => reject(req.error);
     }).catch(e => alert('Failed to reset saved data: ' + e));
   }
-  async remove(item) {
-    if (!confirm(`Remove "${item.title}" from your collection?`)) return;
-    this.items = this.items.filter(i => i != item);
-    if (item.source == 'upload') {
-      try { await filedb.delete(item.id); } catch (e) { console.error(e); }
-    }
-    if (item.cached) { try { await localStore.cacheDelete(item.id); } catch (e) {} }
-    if (item.cloned && item.diskName) { try { await localStore.diskDelete(item.diskName); } catch (e) {} }
-    this.save();
-    this.renderGrid();
+  async removeFromCollection() {
+    if (!confirm(`Remove "${this.record.title}" from your collection?`)) return;
+    await this.deleteStoredData();
+    this.emit('itemremove');
+  }
+  /* Delete every local copy of the software (but not its saves) */
+  async deleteStoredData() {
+    let r = this.record;
+    if (r.source == 'upload') { try { await LocalStore.uploadDelete(r.id); } catch (e) { console.error(e); } }
+    if (r.cached) await LocalStore.cacheDelete(r.id);
+    if (r.cloned && r.diskName) await LocalStore.diskDelete(r.diskName);
   }
 
-  /* ===== Playing ===== */
+  /* ----- Playing ----- */
 
-  async play(item) {
-    item.lastPlayed = Date.now();
-    this.save();
-    let url = item.url;
-    // Prefer a local copy: an on-disk clone, then a device cache, then the
-    // uploaded blob, and finally the remote URL.
-    let localFile = null;
-    if (item.cloned && item.diskName) localFile = await localStore.diskGet(item.diskName);
-    if (!localFile && item.cached) localFile = await localStore.cacheGet(item.id);
-    if (localFile) {
-      url = URL.createObjectURL(localFile);
-    } else if (item.source == 'upload') {
-      let blob = await filedb.get(item.id);
-      if (!blob) {
-        alert('The uploaded file for this title is missing from browser storage. Remove it and add it again.');
-        return;
+  /* Start playing (from the card's click, a user gesture) */
+  async launch() {
+    await this.beforeLaunch();
+    location.hash = 'play/' + this.record.id;
+  }
+  /* Work that needs a user gesture before the game boots (or reboots) */
+  async beforeLaunch() {}
+
+  /* Build the emulator element that plays this title. Throws if the software is
+     unavailable. */
+  async buildEmulator() {
+    let emu = await this.createEmulator();
+    if (!this.record.installed) emu.setAttribute('persist', this.persistStore);
+    if (this.constructor.onscreenKeyboard) {
+      let keyboard = document.createElement('emularity-keyboard');
+      keyboard.setAttribute('layout', 'pc101');
+      emu.appendChild(keyboard);
+    }
+    return emu;
+  }
+  /* Platform-specific emulator setup, overridden by each subclass */
+  async createEmulator() {
+    throw new Error('Unknown platform: ' + this.record.platform);
+  }
+  /* A new emulator element. Waits until the element is registered: on a reload that
+     lands directly on #play/<id> we can get here before the deferred emularity.js
+     module defines it, and an un-upgraded element would later re-run its constructor
+     and class fields, wiping properties we set on it (e.g. a disk handle). */
+  async newEmulator(tag, wasmroot) {
+    await customElements.whenDefined(tag);
+    let emu = document.createElement(tag);
+    emu.setAttribute('wasmroot', wasmroot);
+    emu.setAttribute('splashlogo', '../logos/emularity-transparent.png');
+    return emu;
+  }
+}
+
+class DosItem extends CollectionItem {
+  static key = 'dos';
+  static label = 'IBM PC';
+  static sublabel = 'DOSBox';
+  static query = 'emulator:(dosbox)';
+  static accept = '.zip,.img,.ima';
+  static hint = 'A zip file, mounted as drive C:';
+  static exeField = true;
+
+  // "Install to disk" extracts the zip into a working folder, so it only applies to
+  // zip-based titles; raw disk images stay on Clone/Cache.
+  canInstall() { return /\.zip$/i.test(this.record.filename || ''); }
+
+  /* Convert an archive.org-style start path ('GAMEDIR/GAME.EXE') into autoexec commands */
+  get autoexec() {
+    let exe = this.record.exe;
+    if (!exe) return '';
+    if (exe.includes('\n') || /^[a-z]:/i.test(exe)) return exe; // already explicit commands
+    let parts = exe.replace(/\\/g, '/').split('/').filter(p => p.length);
+    let prog = parts.pop();
+    let lines = ['c:'];
+    if (parts.length) lines.push('cd \\' + parts.join('\\'));
+    lines.push(prog);
+    return lines.join('\n');
+  }
+
+  async install() {
+    let r = this.record;
+    let onProgress = this.progress(this.hasLocalCopy ? 'Loading' : 'Downloading');
+    try {
+      let blob = await this.fetchBlob(onProgress);
+      if (!blob) throw new Error('could not read game data');
+      let root = await LocalStore.getDiskDir(true); // prompts for a folder the first time
+      let installDir = this.diskName.replace(/\.[^.]+$/, '') || r.id;
+      let gameDir = await root.getDirectoryHandle(installDir, { create: true });
+      let cDir = await gameDir.getDirectoryHandle('c', { create: true });
+      await ZipExtractor.extractTo(blob, cDir, this.progress('Extracting'));
+      await this.migrateSavesToDisk(gameDir);
+      this.update({ installed: true, installDir });
+    } catch (e) {
+      if (e.name != 'AbortError') { console.error(e); alert('Failed to install to disk: ' + e.message); }
+      this.render();
+    }
+  }
+  async uninstall() {
+    if (!confirm(`Delete the installed folder for "${this.record.title}" from your disk? Saved games inside it will be lost.`)) return;
+    await this.deleteInstallDir();
+    this.update({ installed: false, installDir: undefined });
+  }
+  async deleteInstallDir() {
+    if (this.record.installDir) await LocalStore.diskDelete(this.record.installDir, { recursive: true });
+  }
+  async deleteStoredData() {
+    await super.deleteStoredData();
+    if (this.record.installed) await this.deleteInstallDir();
+  }
+  /* Merge saves the title accumulated while streaming/cached (its persist store) into
+     the just-extracted disk folder, then retire the store so the folder is the single
+     source of truth. Best-effort: a failure here must not fail the install. */
+  async migrateSavesToDisk(gameDir) {
+    let delta;
+    try { delta = await this.readSavedWrites(); }
+    catch (e) { console.warn('Emularity: could not read saved data to migrate', e); return; }
+    if (!delta || (delta.files.size === 0 && !delta.deleteLog)) return; // nothing saved yet
+    // Apply deletions first (files removed during play), then overlay the writes, so
+    // a delete-then-recreate in the same session lands as the recreated file.
+    for (let line of delta.deleteLog.split('\n')) {
+      if (line && line[0] === 'd') { try { await LocalStore.removePath(gameDir, line.slice(1)); } catch (e) {} }
+    }
+    let migrated = 0;
+    for (let [path, bytes] of delta.files) {
+      try { await LocalStore.writePath(gameDir, path, bytes); migrated++; }
+      catch (e) { console.warn('Emularity: failed to migrate save', path, e); }
+    }
+    // The disk folder now holds these saves; drop the redundant store so installed
+    // games stay single-sourced (a stale store previously showed an empty drive).
+    try { indexedDB.deleteDatabase(this.persistStore); } catch (e) {}
+    if (migrated) console.log('Emularity: migrated ' + migrated + ' saved file(s) to disk for "' + this.record.title + '"');
+  }
+  /* Read the OverlayFS writable delta in the persist store. Returns
+     { files: Map<path, Uint8Array>, deleteLog: string }, or null if the store was never
+     created. Temporarily re-points the BrowserFS global, which every play and extract
+     re-initializes, so this is safe between those. */
+  async readSavedWrites() {
+    let storeName = this.persistStore;
+    // Avoid materializing an empty store when the title was never played with
+    // persistence (the common install-first case).
+    if (indexedDB.databases) {
+      try { if (!(await indexedDB.databases()).some(d => d.name === storeName)) return null; }
+      catch (e) { /* databases() unsupported; fall through and open it */ }
+    }
+    let store = await new Promise(resolve => {
+      let fs = new BrowserFS.FileSystem.IndexedDB(err => resolve(err ? null : fs), storeName);
+    });
+    if (!store) return null;
+    BrowserFS.initialize(store);
+    let fs = BrowserFS.BFSRequire('fs');
+    let readdir = p => new Promise(r => fs.readdir(p, (e, n) => r(e ? [] : n)));
+    let stat = p => new Promise(r => fs.stat(p, (e, s) => r(e ? null : s)));
+    let readFile = p => new Promise(r => fs.readFile(p, (e, d) => r(e ? null : d)));
+    let files = new Map(), deleteLog = '';
+    let walk = async dir => {
+      for (let name of await readdir(dir)) {
+        let full = dir === '/' ? '/' + name : dir + '/' + name;
+        let st = await stat(full);
+        if (!st) continue;
+        if (st.isDirectory()) await walk(full);
+        else {
+          let data = await readFile(full);
+          if (data == null) continue;
+          if (full === '/.deletedFiles.log') deleteLog = data.toString('utf8');
+          else files.set(full, new Uint8Array(data));
+        }
       }
-      url = URL.createObjectURL(blob);
-    }
+    };
+    await walk('/');
+    // Close the underlying IndexedDB connection so a later deleteDatabase() isn't
+    // blocked by it staying open.
+    try { store.store.db.close(); } catch (e) {}
+    return { files, deleteLog };
+  }
 
-    let emu;
-    if (item.platform == 'dos') {
-      emu = document.createElement('emularity-dosbox');
-      emu.setAttribute('wasmroot', '../emulators/dosbox');
-      emu.setAttribute('splashlogo', '../logos/emularity-transparent.png');
-      // Append `exit` so DOSBox quits when the program exits (fires the emulator's
-      // exit event) instead of dropping the user to a bare DOS prompt.
-      if (item.exe) emu.setAttribute('exe', exeToAutoexec(item.exe) + '\nexit');
-      let media = document.createElement(/\.(img|ima)$/i.test(item.filename) ? 'emularity-dosbox-floppy' : 'emularity-dosbox-drive');
-      media.setAttribute('letter', media.tagName.toLowerCase().includes('floppy') ? 'a' : 'c');
-      media.setAttribute('url', url);
-      media.setAttribute('label', item.title);
-      emu.appendChild(media);
-    } else if (item.platform == 'apple2e') {
-      let ext = item.filename.match(/\.([a-z0-9]+)$/i);
-      let path = '/software.' + (ext ? ext[1].toLowerCase() : 'dsk');
-      emu = document.createElement('emularity-mame');
-      emu.setAttribute('wasmroot', '../emulators/mame');
-      emu.setAttribute('wasmscript', 'mameapple2e.module.js');
-      emu.setAttribute('wasminit', 'MAMEAPPLE2E');
-      emu.setAttribute('system', 'apple2e');
-      emu.setAttribute('arguments', '-flop1 /emulator' + path);
-      emu.setAttribute('splashlogo', '../logos/emularity-transparent.png');
-      let bios = document.createElement('emularity-file');
-      bios.setAttribute('url', 'https://emularity-bios.ux-b.archive.org/apple2e.zip');
-      bios.setAttribute('path', '/apple2e.zip');
-      bios.setAttribute('label', 'Apple IIe BIOS');
-      emu.appendChild(bios);
-      let software = document.createElement('emularity-file');
-      software.setAttribute('url', url);
-      software.setAttribute('path', path);
-      software.setAttribute('label', item.title);
-      emu.appendChild(software);
+  // Re-acquire the install folder's permission while we still have a user gesture, so
+  // the game can boot from disk after a reload.
+  async beforeLaunch() {
+    if (this.record.installed) { try { await LocalStore.getDiskDir(false); } catch (e) {} }
+  }
+
+  async createEmulator() {
+    let r = this.record;
+    let emu = await this.newEmulator('emularity-dosbox', '../emulators/dosbox');
+    // Append `exit` so DOSBox quits when the program exits (fires the emulator's exit
+    // event) instead of dropping the user to a bare DOS prompt.
+    if (r.exe) emu.setAttribute('exe', this.autoexec + '\nexit');
+    // Installed to disk: run from the real folder (writes mirror back live) instead of
+    // a mounted zip. Falls back to the normal media if the folder is unavailable (e.g.
+    // access wasn't re-granted after a reload), without persistence.
+    let gameDir = null;
+    if (r.installed && r.installDir) {
+      try { let root = await LocalStore.getDiskDir(false); if (root) gameDir = await root.getDirectoryHandle(r.installDir); }
+      catch (e) { console.warn('Emularity: installed folder unavailable; playing a fresh copy without persistence.', e); }
+    }
+    if (gameDir) {
+      emu.diskHandle = gameDir;
+      let drive = document.createElement('emularity-dosbox-drive');
+      drive.setAttribute('letter', 'c');
+      emu.appendChild(drive);
     } else {
-      alert('Unknown platform: ' + item.platform);
-      return;
+      let floppy = /\.(img|ima)$/i.test(r.filename);
+      let media = document.createElement(floppy ? 'emularity-dosbox-floppy' : 'emularity-dosbox-drive');
+      media.setAttribute('letter', floppy ? 'a' : 'c');
+      media.setAttribute('url', await this.mediaURL());
+      media.setAttribute('label', r.title);
+      emu.appendChild(media);
     }
-    // Persist each title's writes (saves, high scores, NVRAM) under its own store,
-    // so titles sharing a mountpoint can't contaminate each other
-    emu.setAttribute('persist', 'collection-' + item.id);
-
-    let keyboard = document.createElement('emularity-keyboard');
-    keyboard.setAttribute('layout', 'pc101');
-    emu.appendChild(keyboard);
-
-    // Swap the library UI out for the player. "Back to collection" navigates history
-    // (same as the browser Back button), which returns to the library route.
-    let bar = document.createElement('div');
-    bar.className = 'player-bar';
-    bar.innerHTML = `
-      <button class="pb-back">◀ Back to collection</button>
-      <span class="player-title"></span>
-      <span class="pb-timer" title="Time played this session">0:00</span>
-      <span class="pb-controls">
-        <button class="pb-mute"></button>
-        <button class="pb-theater" title="Theater mode">▭</button>
-        <button class="pb-fullscreen" title="Fullscreen">⛶</button>
-      </span>`;
-    bar.querySelector('.player-title').textContent = item.title;
-    bar.querySelector('.pb-back').addEventListener('click', () => history.back());
-
-    // Count up play time for this session (the interval dies on the reload that
-    // "Back to collection" triggers).
-    let start = Date.now(), timerEl = bar.querySelector('.pb-timer');
-    let tick = () => { timerEl.textContent = formatDuration(Date.now() - start); };
-    tick();
-    this.playTimer = setInterval(tick, 1000);
-
-    // When the emulated program exits, show a "powered off" screen instead of a
-    // bare DOS prompt.
-    emu.addEventListener('exit', () => this.showPoweredOff(item));
-
-    let muteBtn = bar.querySelector('.pb-mute');
-    let updateMute = () => { muteBtn.textContent = this.muted ? '🔇' : '🔊'; muteBtn.title = this.muted ? 'Unmute' : 'Mute'; };
-    updateMute();
-    muteBtn.addEventListener('click', () => { this.muted = !this.muted; audioMute.set(this.muted); this.save(); updateMute(); });
-
-    let theaterBtn = bar.querySelector('.pb-theater');
-    theaterBtn.classList.toggle('active', this.theater);
-    theaterBtn.addEventListener('click', () => {
-      this.theater = !this.theater;
-      this.classList.toggle('theater', this.theater);
-      theaterBtn.classList.toggle('active', this.theater);
-      this.save();
-    });
-
-    bar.querySelector('.pb-fullscreen').addEventListener('click', () => {
-      let c = this.currentEmu && this.currentEmu.canvas;
-      if (document.fullscreenElement) document.exitFullscreen();
-      else if (c && c.requestFullscreen) c.requestFullscreen().catch(e => console.warn('Emularity: fullscreen failed', e));
-    });
-
-    this.currentEmu = emu;
-    this.classList.add('playing');
-    this.classList.toggle('theater', this.theater);
-    this.innerHTML = '';
-    this.appendChild(bar);
-    this.appendChild(emu);
+    return emu;
   }
-  showPoweredOff(item) {
-    if (this.poweredOff) return;
-    this.poweredOff = true;
-    clearInterval(this.playTimer);
-    if (document.fullscreenElement) { try { document.exitFullscreen(); } catch (e) {} }
-    let overlay = document.createElement('div');
-    overlay.className = 'powered-off';
-    overlay.innerHTML = `
-      <div class="po-title"></div>
-      <p class="po-sub">The game has powered off.</p>
-      <button class="po-power" title="Power on">⏻</button>
-      <span class="po-label">Power on</span>`;
-    overlay.querySelector('.po-title').textContent = item.title;
-    let powerOn = () => { location.reload(); };
-    overlay.querySelector('.po-power').addEventListener('click', powerOn);
-    overlay.querySelector('.po-label').addEventListener('click', powerOn);
-    this.appendChild(overlay);
+}
+
+class Apple2eItem extends CollectionItem {
+  static key = 'apple2e';
+  static label = 'Apple IIe';
+  static sublabel = 'MAME';
+  static query = 'emulator:(apple2ee)';
+  static accept = '.dsk,.do,.po,.nib,.woz';
+  static hint = 'A floppy disk image (.dsk, .do, .po, .nib, .woz)';
+
+  async createEmulator() {
+    let r = this.record;
+    let ext = r.filename.match(/\.([a-z0-9]+)$/i);
+    let path = '/software.' + (ext ? ext[1].toLowerCase() : 'dsk');
+    let emu = await this.newEmulator('emularity-mame', '../emulators/mame');
+    emu.setAttribute('wasmscript', 'mameapple2e.module.js');
+    emu.setAttribute('wasminit', 'MAMEAPPLE2E');
+    emu.setAttribute('system', 'apple2e');
+    emu.setAttribute('arguments', '-flop1 /emulator' + path);
+    let bios = document.createElement('emularity-file');
+    bios.setAttribute('url', 'https://emularity-bios.ux-b.archive.org/apple2e.zip');
+    bios.setAttribute('path', '/apple2e.zip');
+    bios.setAttribute('label', 'Apple IIe BIOS');
+    emu.appendChild(bios);
+    let software = document.createElement('emularity-file');
+    software.setAttribute('url', await this.mediaURL());
+    software.setAttribute('path', path);
+    software.setAttribute('label', r.title);
+    emu.appendChild(software);
+    return emu;
+  }
+}
+
+class X86Item extends CollectionItem {
+  static key = 'x86';
+  static label = 'x86 PC';
+  static sublabel = 'v86';
+  static query = 'emulator:(v86)';
+  static accept = '.iso,.img,.raw,.qcow2,.hdd,.bin';
+  static hint = 'A bootable CD-ROM (.iso) or hard-disk image (.img). Boots a full x86 PC — e.g. a Linux install/live disc.';
+  static onscreenKeyboard = false; // v86 takes input on its own canvas
+  static captureMouseField = true;
+
+  /* Starter content: two bundled demos, a graphical TinyCore desktop and a tiny
+     serial-console Linux shell */
+  static starterRecords() {
+    return [
+      { id: 'demo-tinycore', platform: 'x86', title: 'TinyCore Linux (graphical)', source: 'url',
+        url: '../emulators/v86/images/tinycore.iso', filename: 'tinycore.iso', memory: 512, added: Date.now() },
+      { id: 'demo-linux-shell', platform: 'x86', title: 'Linux shell (serial console)', source: 'url',
+        url: '../emulators/v86/images/linux4.iso', filename: 'linux4.iso', console: 'serial', added: Date.now() - 1 },
+    ];
+  }
+  /* Arch Linux booting from copy.sh's lazily-streamed 9p rootfs. Root-relative URLs
+     resolve to the current origin, so this only works behind the local v86-proxy.py
+     (which bridges to i.copy.sh). Added by opening collection.html?addarch. */
+  static archRecord() {
+    return {
+      id: 'arch-linux', platform: 'x86', title: 'Arch Linux', source: 'url', filename: 'arch', added: Date.now(),
+      v86opts: {
+        filesystem: { baseurl: '/arch/', basefs: { url: '/fs.json' } },
+        cmdline: 'rw apm=off vga=0x344 video=vesafb:ypan,vremap:8 root=host9p rootfstype=9p rootflags=trans=virtio,cache=loose mitigations=off audit=0 init_on_free=on tsc=reliable random.trust_cpu=on nowatchdog init=/usr/bin/init-openrc net.ifnames=0 biosdevname=0',
+        bzimage_initrd_from_filesystem: true, net_device_type: 'virtio',
+      },
+    };
   }
 
-  /* ===== Add-software dialog ===== */
+  async createEmulator() {
+    let r = this.record;
+    let emu = await this.newEmulator('emularity-x86', '../emulators/v86');
+    if (r.memory) emu.setAttribute('memory', String(r.memory));
+    if (r.console) emu.setAttribute('console', r.console); // 'serial' for serial-only images
+    if (r.captureMouse) emu.setAttribute('capturemouse', '');
+    emu.imagename = r.filename || '';
+    if (r.v86opts) {
+      // A full distro: kernel + lazily-fetched 9p root filesystem, passed straight to
+      // v86, with no single boot image.
+      emu.v86opts = r.v86opts;
+    } else {
+      if (r.imagetype) emu.setAttribute('imagetype', r.imagetype);
+      // A local copy boots as an in-memory image; a remote URL streams on demand via
+      // HTTP range requests instead of downloading it all.
+      let blob = await this.media();
+      if (blob) emu.imageBlob = blob;
+      else emu.setAttribute('image', r.url);
+    }
+    return emu;
+  }
+}
 
-  buildDialog() {
-    let dialog = document.createElement('dialog');
-    dialog.innerHTML = `
-      <button class="close-dialog" title="Close">✕</button>
-      <h3>Add software</h3>
-      <div class="add-tabs">
-        <button data-tab="search" class="active">Search archive.org</button>
-        <button data-tab="url">From URL</button>
-        <button data-tab="upload">Upload</button>
-      </div>
+DosItem.register('emularity-item-dos');
+Apple2eItem.register('emularity-item-apple2e');
+X86Item.register('emularity-item-x86');
 
-      <div class="tab-panel" data-panel="search">
-        <div class="search-row">
-          <span class="search-filter" title="Results are filtered to software for this platform"></span>
-          <input type="search" name="query" placeholder="Search titles...">
+
+/* ===== Dialogs ===== */
+
+/* Edit a title's info. open(item) shows it for that item. */
+class EditDialog extends HTMLElement {
+  connectedCallback() {
+    if (this.dialog) return;
+    this.innerHTML = `
+      <dialog class="edit-dialog">
+        <button class="close-dialog" title="Close">✕</button>
+        <h3>Edit software</h3>
+        <label>Title <input type="text" name="edit-title"></label>
+        <label class="edit-exe-field">Program to run <input type="text" name="edit-exe" placeholder="GAMEDIR/GAME.EXE"></label>
+        <label class="edit-url-field">URL <input type="url" name="edit-url"></label>
+        <label>Thumbnail URL <input type="url" name="edit-thumb" placeholder="https://archive.org/services/img/..."></label>
+        <label class="edit-capture-field"><input type="checkbox" name="edit-capture"> Capture the mouse when the screen is clicked (Esc releases it)</label>
+        <button class="primary edit-save">Save changes</button>
+      </dialog>`;
+    this.dialog = this.querySelector('dialog');
+    this.querySelector('.close-dialog').addEventListener('click', () => this.dialog.close());
+    this.querySelector('.edit-save').addEventListener('click', () => this.save());
+  }
+  field(name) { return this.querySelector(`[name="${name}"]`); }
+  open(item) {
+    let r = item.record;
+    this.item = item;
+    this.field('edit-title').value = r.title || '';
+    this.field('edit-exe').value = r.exe || '';
+    this.field('edit-url').value = r.url || '';
+    this.field('edit-thumb').value = r.thumb || '';
+    this.field('edit-capture').checked = !!r.captureMouse;
+    this.querySelector('.edit-exe-field').style.display = item.constructor.exeField ? '' : 'none';
+    this.querySelector('.edit-capture-field').style.display = item.constructor.captureMouseField ? '' : 'none';
+    this.querySelector('.edit-url-field').style.display = r.source == 'url' ? '' : 'none';
+    this.dialog.showModal();
+  }
+  save() {
+    let r = this.item.record;
+    let fields = {
+      title: this.field('edit-title').value.trim() || r.title,
+      exe: this.field('edit-exe').value.trim(),
+      thumb: this.field('edit-thumb').value.trim() || undefined,
+    };
+    if (r.source == 'url') fields.url = this.field('edit-url').value.trim() || r.url;
+    if (this.item.constructor.captureMouseField) fields.captureMouse = this.field('edit-capture').checked || undefined;
+    this.item.update(fields);
+    this.dialog.close();
+  }
+}
+customElements.define('emularity-edit-dialog', EditDialog);
+
+/* Add software to the collection: from an archive.org search, a URL, or an upload.
+   open(platform) shows it for a platform's item class; new items are added through
+   the `collection` it belongs to. */
+class AddDialog extends HTMLElement {
+  collection = null;
+
+  connectedCallback() {
+    if (this.dialog) return;
+    this.innerHTML = `
+      <dialog>
+        <button class="close-dialog" title="Close">✕</button>
+        <h3>Add software</h3>
+        <div class="add-tabs">
+          <button data-tab="search" class="active">Search archive.org</button>
+          <button data-tab="url">From URL</button>
+          <button data-tab="upload">Upload</button>
         </div>
-        <p class="field-hint">Results from archive.org's software library. Click one to add it to your collection.</p>
-        <div class="search-results"></div>
-      </div>
 
-      <div class="tab-panel" data-panel="url" style="display: none">
-        <label>Title <input type="text" name="title"></label>
-        <label>URL <input type="url" name="url" placeholder="https://example.com/game.zip"></label>
-        <p class="field-hint url-hint"></p>
-        <label class="exe-field">Program to run <input type="text" name="exe" placeholder="GAMEDIR/GAME.EXE"></label>
-        <button class="primary add-url">Add to collection</button>
-      </div>
+        <div class="tab-panel" data-panel="search">
+          <div class="search-row">
+            <span class="search-filter" title="Results are filtered to software for this platform"></span>
+            <input type="search" name="query" placeholder="Search titles...">
+          </div>
+          <p class="field-hint">Results from archive.org's software library. Click one to add it to your collection.</p>
+          <div class="search-results"></div>
+        </div>
 
-      <div class="tab-panel" data-panel="upload" style="display: none">
-        <label>Title <input type="text" name="uploadtitle"></label>
-        <label>File <input type="file" name="file"></label>
-        <p class="field-hint upload-hint"></p>
-        <label class="exe-field">Program to run <input type="text" name="uploadexe" placeholder="GAMEDIR/GAME.EXE"></label>
-        <button class="primary add-upload">Add to collection</button>
-      </div>
-      <p class="error-note"></p>
-    `;
-    this.appendChild(dialog);
-    this.dialog = dialog;
+        <div class="tab-panel" data-panel="url" style="display: none">
+          <label>Title <input type="text" name="title"></label>
+          <label>URL <input type="url" name="url" placeholder="https://example.com/game.zip"></label>
+          <p class="field-hint url-hint"></p>
+          <label class="exe-field">Program to run <input type="text" name="exe" placeholder="GAMEDIR/GAME.EXE"></label>
+          <button class="primary add-url">Add to collection</button>
+        </div>
 
-    dialog.querySelector('.close-dialog').addEventListener('click', () => dialog.close());
-    dialog.querySelectorAll('.add-tabs button').forEach(btn => {
+        <div class="tab-panel" data-panel="upload" style="display: none">
+          <label>Title <input type="text" name="uploadtitle"></label>
+          <label>File <input type="file" name="file"></label>
+          <p class="field-hint upload-hint"></p>
+          <label class="exe-field">Program to run <input type="text" name="uploadexe" placeholder="GAMEDIR/GAME.EXE"></label>
+          <button class="primary add-upload">Add to collection</button>
+        </div>
+        <p class="error-note"></p>
+      </dialog>`;
+    this.dialog = this.querySelector('dialog');
+    this.results = this.querySelector('.search-results');
+
+    this.querySelector('.close-dialog').addEventListener('click', () => this.dialog.close());
+    this.querySelectorAll('.add-tabs button').forEach(btn => {
       btn.addEventListener('click', () => {
-        dialog.querySelectorAll('.add-tabs button').forEach(b => b.classList.toggle('active', b == btn));
-        dialog.querySelectorAll('.tab-panel').forEach(p => {
-          p.style.display = (p.dataset.panel == btn.dataset.tab) ? '' : 'none';
-        });
+        this.querySelectorAll('.add-tabs button').forEach(b => b.classList.toggle('active', b == btn));
+        this.querySelectorAll('.tab-panel').forEach(p => { p.style.display = (p.dataset.panel == btn.dataset.tab) ? '' : 'none'; });
       });
     });
-
-    let query = dialog.querySelector('[name="query"]');
+    let query = this.field('query');
     // Debounce as-you-type searches so we don't hit archive.org on every keystroke
     query.addEventListener('input', () => {
-      clearTimeout(this.searchtimer);
-      this.searchtimer = setTimeout(() => this.runSearch(), 500);
+      clearTimeout(this.searchTimer);
+      this.searchTimer = setTimeout(() => this.search(), 500);
     });
     query.addEventListener('keydown', ev => {
-      if (ev.key == 'Enter') {
-        clearTimeout(this.searchtimer);
-        this.runSearch();
-      }
+      if (ev.key == 'Enter') { clearTimeout(this.searchTimer); this.search(); }
     });
     // Infinite scroll: fetch the next page as the list nears the bottom
-    dialog.querySelector('.search-results').addEventListener('scroll', ev => {
-      let el = ev.target;
-      if (el.scrollTop + el.clientHeight >= el.scrollHeight - 150) this.loadMoreResults();
+    this.results.addEventListener('scroll', () => {
+      let el = this.results;
+      if (el.scrollTop + el.clientHeight >= el.scrollHeight - 150) this.loadMore();
     });
-    dialog.querySelector('.add-url').addEventListener('click', () => this.addFromURL());
-    dialog.querySelector('.add-upload').addEventListener('click', () => this.addFromUpload());
+    this.querySelector('.add-url').addEventListener('click', () => this.addFromURL());
+    this.querySelector('.add-upload').addEventListener('click', () => this.addFromUpload());
   }
-  openDialog() {
-    let platform = PLATFORMS[this.platform];
-    this.dialog.querySelector('[name="query"]').value = '';
-    this.dialog.querySelector('.search-filter').textContent = platform.query;
-    this.dialog.querySelector('.search-results').innerHTML = '';
-    this.dialog.querySelector('.error-note').textContent = '';
-    this.dialog.querySelector('.url-hint').textContent = platform.urlHint;
-    this.dialog.querySelector('.upload-hint').textContent = platform.urlHint;
-    this.dialog.querySelector('[name="file"]').accept = platform.accept;
-    this.dialog.querySelectorAll('.exe-field').forEach(el => {
-      el.style.display = platform.exeField ? '' : 'none';
-    });
+  field(name) { return this.querySelector(`[name="${name}"]`); }
+  setError(msg) { this.querySelector('.error-note').textContent = msg || ''; }
+
+  open(platform) {
+    this.platform = platform;
+    this.field('query').value = '';
+    this.querySelector('.search-filter').textContent = platform.query;
+    this.results.innerHTML = '';
+    this.setError('');
+    this.querySelector('.url-hint').textContent = platform.hint;
+    this.querySelector('.upload-hint').textContent = platform.hint;
+    this.field('file').accept = platform.accept;
+    this.querySelectorAll('.exe-field').forEach(el => { el.style.display = platform.exeField ? '' : 'none'; });
     this.dialog.showModal();
-    this.dialog.querySelector('[name="query"]').focus();
-    this.runSearch(); // pre-populate with this platform's most popular software
+    this.field('query').focus();
+    this.search(); // pre-populate with this platform's most popular software
   }
-  setError(msg) {
-    this.dialog.querySelector('.error-note').textContent = msg || '';
-  }
+
+  /* ----- archive.org search ----- */
+
   appendResults(docs) {
-    let results = this.dialog.querySelector('.search-results');
     docs.forEach(doc => {
       let row = document.createElement('div');
       row.className = 'search-result';
       row.innerHTML = '<img loading="lazy"><div><div class="result-title"></div><div class="result-detail"></div></div>';
-      row.querySelector('img').src = 'https://archive.org/services/img/' + doc.identifier;
+      row.querySelector('img').src = ArchiveOrg.thumbUrl(doc.identifier);
       row.querySelector('.result-title').textContent = Array.isArray(doc.title) ? doc.title[0] : (doc.title || doc.identifier);
       row.querySelector('.result-detail').textContent = doc.identifier + (doc.year ? ' · ' + doc.year : '');
       row.addEventListener('click', () => this.addFromArchive(doc, row));
-      results.appendChild(row);
+      this.results.appendChild(row);
     });
   }
-  async runSearch() {
-    let results = this.dialog.querySelector('.search-results');
-    let text = this.dialog.querySelector('[name="query"]').value.trim();
-    let query = PLATFORMS[this.platform].query + (text ? ' ' + text : '');
-    let seq = this.searchseq = (this.searchseq || 0) + 1;
-    this.searchState = { seq, query, page: 1, total: Infinity, loading: true };
+  async search() {
+    let results = this.results;
+    let text = this.field('query').value.trim();
+    let query = this.platform.query + (text ? ' ' + text : '');
+    let state = this.searchState = { query, page: 1, total: Infinity, loading: true };
     if (!results.children.length) results.innerHTML = '<p class="field-hint">Searching...</p>';
     results.classList.add('loading');
     this.setError('');
     try {
-      let { docs, total } = await searchArchive(query, 1);
-      if (seq != this.searchseq) return; // a newer search superseded this one
+      let { docs, total } = await ArchiveOrg.search(query, 1);
+      if (state != this.searchState) return; // a newer search superseded this one
       results.classList.remove('loading');
       results.innerHTML = '';
-      this.searchState.total = total;
-      this.searchState.loading = false;
+      state.total = total;
+      state.loading = false;
       if (!docs.length) { results.innerHTML = '<p class="field-hint">No results.</p>'; return; }
       this.appendResults(docs);
       results.scrollTop = 0;
     } catch (e) {
-      if (seq != this.searchseq) return;
+      if (state != this.searchState) return;
       console.error(e);
       results.classList.remove('loading');
       results.innerHTML = '';
       this.setError('Search failed: ' + e.message);
     }
   }
-  async loadMoreResults() {
-    let st = this.searchState;
-    if (!st || st.loading) return;
-    let results = this.dialog.querySelector('.search-results');
-    if (results.querySelectorAll('.search-result').length >= st.total) return; // all loaded
-    st.loading = true;
-    let seq = st.seq, nextPage = st.page + 1;
+  async loadMore() {
+    let state = this.searchState;
+    if (!state || state.loading) return;
+    if (this.results.querySelectorAll('.search-result').length >= state.total) return; // all loaded
+    state.loading = true;
     let loader = document.createElement('div');
     loader.className = 'search-more';
     loader.textContent = 'Loading more...';
-    results.appendChild(loader);
+    this.results.appendChild(loader);
     try {
-      let { docs } = await searchArchive(st.query, nextPage);
-      loader.remove();
-      if (seq != this.searchseq) return; // superseded by a newer search
-      st.page = nextPage;
-      st.loading = false;
+      let { docs } = await ArchiveOrg.search(state.query, state.page + 1);
+      if (state != this.searchState) return; // superseded by a newer search
+      state.page++;
       this.appendResults(docs);
     } catch (e) {
-      loader.remove();
-      if (seq != this.searchseq) return;
-      st.loading = false;
       console.error(e);
+    } finally {
+      loader.remove();
+      state.loading = false;
     }
+  }
+
+  /* ----- Adding ----- */
+
+  add(record) {
+    return this.collection.addItem(Object.assign({ platform: this.platform.key }, record));
   }
   async addFromArchive(doc, row) {
     let identifier = doc.identifier;
     this.setError('');
     row.style.opacity = .5;
     try {
-      let resolved = await resolveArchiveItem(identifier);
+      let resolved = await ArchiveOrg.resolveItem(identifier);
       this.add({
         title: resolved.title,
         source: 'url',
@@ -1466,7 +1796,7 @@ class EmularityCollection extends HTMLElement {
         filename: resolved.filename,
         exe: resolved.exe,
         identifier: identifier,
-        thumb: 'https://archive.org/services/img/' + identifier,
+        thumb: ArchiveOrg.thumbUrl(identifier),
         rating: doc.avg_rating != null ? +doc.avg_rating : 0,
         size: resolved.size,
       });
@@ -1479,42 +1809,355 @@ class EmularityCollection extends HTMLElement {
     }
   }
   addFromURL() {
-    let url = this.dialog.querySelector('[name="url"]').value.trim();
-    let title = this.dialog.querySelector('[name="title"]').value.trim();
+    let url = this.field('url').value.trim();
     if (!url) return this.setError('A URL is required.');
     let filename = url.split('?')[0].split('/').pop() || 'software';
     let item = this.add({
-      title: title || filename,
+      title: this.field('title').value.trim() || filename,
       source: 'url',
       url: url,
       filename: filename,
-      exe: this.dialog.querySelector('[name="exe"]').value.trim(),
+      exe: this.field('exe').value.trim(),
     });
-    this.fetchSize(item); // fill in size via HEAD in the background
+    item.fetchSize(); // fill in size via HEAD in the background
     this.dialog.close();
   }
   async addFromUpload() {
-    let input = this.dialog.querySelector('[name="file"]');
-    let title = this.dialog.querySelector('[name="uploadtitle"]').value.trim();
+    let input = this.field('file');
     if (!input.files.length) return this.setError('Choose a file to upload.');
     let file = input.files[0];
     let item = this.add({
-      title: title || file.name,
+      title: this.field('uploadtitle').value.trim() || file.name,
       source: 'upload',
       filename: file.name,
-      exe: this.dialog.querySelector('[name="uploadexe"]').value.trim(),
+      exe: this.field('uploadexe').value.trim(),
       size: file.size,
     });
     try {
-      await filedb.put(item.id, file);
+      await LocalStore.uploadPut(item.record.id, file);
       this.dialog.close();
     } catch (e) {
       console.error(e);
-      this.items = this.items.filter(i => i != item);
-      this.save();
-      this.renderGrid();
+      this.collection.dropItem(item);
       this.setError('Failed to store the file in browser storage: ' + e.message);
     }
+  }
+}
+customElements.define('emularity-add-dialog', AddDialog);
+
+
+/* ===== Player =====
+
+   Plays one collection item: a bar (back, title, session timer, mouse capture, mute,
+   theater, fullscreen) above the item's emulator, and a "powered off" screen when the emulated
+   program exits. Set `prefs` ({ muted, theater }, shared with the collection) before
+   load(); changes to it are announced with a `prefschange` event. */
+class CollectionPlayer extends HTMLElement {
+  prefs = { muted: false, theater: false };
+
+  /* Build the item's emulator and the player around it. Throws if the item can't be
+     played. */
+  async load(item) {
+    this.item = item;
+    this.emu = await item.buildEmulator();
+    this.emu.addEventListener('exit', () => this.showPoweredOff());
+
+    let bar = document.createElement('div');
+    bar.className = 'player-bar';
+    bar.innerHTML = `
+      <button class="pb-back">◀ Back to collection</button>
+      <span class="player-title"></span>
+      <span class="pb-timer" title="Time played this session">0:00</span>
+      <span class="pb-controls">
+        <button class="pb-capture" title="Capture mouse (Esc releases it)">🖱</button>
+        <button class="pb-mute"></button>
+        <button class="pb-theater" title="Theater mode">▭</button>
+        <button class="pb-fullscreen" title="Fullscreen">⛶</button>
+      </span>`;
+    bar.querySelector('.player-title').textContent = item.record.title;
+    // Navigates history (same as the browser Back button), back to the library route
+    bar.querySelector('.pb-back').addEventListener('click', () => history.back());
+
+    // Count up play time for this session (it ends with the reload that leaving the
+    // player triggers).
+    let start = Date.now(), timerEl = bar.querySelector('.pb-timer');
+    let tick = () => { timerEl.textContent = Format.duration(Date.now() - start); };
+    tick();
+    this.timer = setInterval(tick, 1000);
+
+    let muteBtn = bar.querySelector('.pb-mute');
+    let updateMute = () => { muteBtn.textContent = this.prefs.muted ? '🔇' : '🔊'; muteBtn.title = this.prefs.muted ? 'Unmute' : 'Mute'; };
+    updateMute();
+    muteBtn.addEventListener('click', () => {
+      this.prefs.muted = !this.prefs.muted;
+      AudioMute.set(this.prefs.muted);
+      updateMute();
+      this.dispatchEvent(new CustomEvent('prefschange'));
+    });
+
+    let theaterBtn = bar.querySelector('.pb-theater');
+    let updateTheater = () => {
+      this.classList.toggle('theater', this.prefs.theater);
+      theaterBtn.classList.toggle('active', this.prefs.theater);
+    };
+    updateTheater();
+    theaterBtn.addEventListener('click', () => {
+      this.prefs.theater = !this.prefs.theater;
+      updateTheater();
+      this.dispatchEvent(new CustomEvent('prefschange'));
+    });
+
+    // Pointer lock, for emulators that support it: raw relative mouse movement
+    let captureBtn = bar.querySelector('.pb-capture');
+    if (typeof this.emu.lockPointer == 'function') {
+      captureBtn.addEventListener('click', () => this.emu.lockPointer().catch(e => console.warn('Emularity: pointer lock failed', e)));
+    } else {
+      captureBtn.remove();
+    }
+
+    bar.querySelector('.pb-fullscreen').addEventListener('click', () => {
+      let c = this.emu.canvas;
+      if (document.fullscreenElement) document.exitFullscreen();
+      else if (c && c.requestFullscreen) c.requestFullscreen().catch(e => console.warn('Emularity: fullscreen failed', e));
+    });
+
+    this.replaceChildren(bar, this.emu);
+  }
+
+  showPoweredOff() {
+    if (this.poweredOff) return;
+    this.poweredOff = true;
+    clearInterval(this.timer);
+    if (document.fullscreenElement) { try { document.exitFullscreen(); } catch (e) {} }
+    let overlay = document.createElement('div');
+    overlay.className = 'powered-off';
+    overlay.innerHTML = `
+      <div class="po-title"></div>
+      <p class="po-sub">The game has powered off.</p>
+      <button class="po-power" title="Power on">⏻</button>
+      <span class="po-label">Power on</span>`;
+    overlay.querySelector('.po-title').textContent = this.item.record.title;
+    let powerOn = async () => {
+      await this.item.beforeLaunch(); // e.g. re-grant folder access within this gesture
+      location.reload();
+    };
+    overlay.querySelector('.po-power').addEventListener('click', powerOn);
+    overlay.querySelector('.po-label').addEventListener('click', powerOn);
+    this.appendChild(overlay);
+  }
+}
+customElements.define('emularity-collection-player', CollectionPlayer);
+
+
+/* ===== Collection =====
+
+   The library: platform tabs, a sortable grid of the platform's items, and the
+   add/edit dialogs. Persists the item records and view preferences in localStorage.
+   Routes: #<platform> shows that platform's library; #play/<itemId> plays a title. */
+class EmularityCollection extends HTMLElement {
+  static STORAGE_KEY = 'emularity-collection';
+  static SORTS = {
+    'added-desc':  { label: 'Recently added', cmp: (a, b) => (b.added || 0) - (a.added || 0) },
+    'played-desc': { label: 'Last played',    cmp: (a, b) => (b.lastPlayed || 0) - (a.lastPlayed || 0) },
+    'title-asc':   { label: 'Title (A–Z)',    cmp: (a, b) => (a.title || '').localeCompare(b.title || '') },
+    'rating-desc': { label: 'Rating',         cmp: (a, b) => (b.rating || 0) - (a.rating || 0) },
+  };
+
+  items = [];
+  playing = false;
+
+  connectedCallback() {
+    let platforms = CollectionItem.platforms;
+    let stored = {};
+    try { stored = JSON.parse(localStorage.getItem(EmularityCollection.STORAGE_KEY)) || {}; } catch (e) {}
+    this.platform = platforms[stored.platform] ? stored.platform : Object.keys(platforms)[0];
+    this.sort = EmularityCollection.SORTS[stored.sort] ? stored.sort : 'added-desc';
+    this.prefs = { muted: !!stored.muted, theater: !!stored.theater };
+    this.x86Seeded = stored.x86Seeded;
+    AudioMute.set(this.prefs.muted);
+
+    let changed = false;
+    for (let record of stored.items || []) {
+      let item = CollectionItem.fromRecord(record);
+      if (!item) continue;
+      changed = item.normalize() || changed;
+      this.adopt(item);
+    }
+    // One-time x86 starter content. Seeded only if the user has never had any x86
+    // items, and remembered so removing them sticks.
+    if (!this.x86Seeded && !this.items.some(i => i.record.platform == 'x86')) {
+      X86Item.starterRecords().forEach(r => this.adopt(CollectionItem.fromRecord(r)));
+      this.x86Seeded = changed = true;
+    }
+    if (/[?&]addarch\b/.test(location.search) && !this.items.some(i => i.record.id == 'arch-linux')) {
+      this.adopt(CollectionItem.fromRecord(X86Item.archRecord()));
+      changed = true;
+    }
+    if (changed) this.save();
+
+    // Close any open card menu when clicking elsewhere
+    document.addEventListener('click', () => this.closeMenus());
+    window.addEventListener('hashchange', () => this.renderRoute());
+    if (!location.hash) history.replaceState(null, '', '#' + this.platform);
+    this.renderRoute();
+    this.fetchMissingRatings();
+    this.fetchMissingSizes();
+  }
+
+  /* ----- Items ----- */
+
+  adopt(item) {
+    item.addEventListener('itemchange', () => { this.save(); this.renderGrid(); });
+    item.addEventListener('itemedit', () => this.editDialog.open(item));
+    item.addEventListener('itemremove', () => this.dropItem(item));
+    item.addEventListener('menuopen', () => this.closeMenus());
+    this.items.push(item);
+    return item;
+  }
+  /* Add a new item from a record (as built by the add dialog) */
+  addItem(record) {
+    let item = CollectionItem.fromRecord(Object.assign(record, { id: 'sw-' + Date.now() + '-' + this.items.length, added: Date.now() }));
+    this.adopt(item);
+    this.save();
+    this.renderGrid();
+    return item;
+  }
+  dropItem(item) {
+    this.items = this.items.filter(i => i != item);
+    item.remove();
+    this.save();
+    this.renderGrid();
+  }
+  closeMenus() {
+    this.items.forEach(i => i.closeMenu());
+  }
+  save() {
+    try {
+      localStorage.setItem(EmularityCollection.STORAGE_KEY, JSON.stringify({
+        platform: this.platform, sort: this.sort, muted: this.prefs.muted, theater: this.prefs.theater,
+        x86Seeded: this.x86Seeded, items: this.items.map(i => i.record),
+      }));
+    } catch (e) {
+      console.error('Failed to save collection', e);
+    }
+  }
+  /* Look up archive.org ratings for archive-sourced items that don't have one yet */
+  async fetchMissingRatings() {
+    let pending = this.items.filter(i => i.record.rating === undefined && i.archiveId);
+    if (!pending.length) return;
+    let ratings = {};
+    try { ratings = await ArchiveOrg.ratings(pending.map(i => i.archiveId)); }
+    catch (e) { console.error('Failed to fetch ratings', e); } // rate as 0 rather than retry endlessly
+    pending.forEach(i => { i.record.rating = ratings[i.archiveId] ?? 0; });
+    this.save();
+    this.renderGrid();
+  }
+  async fetchMissingSizes() {
+    for (let item of this.items) await item.fetchSize();
+  }
+
+  /* ----- Library ----- */
+
+  renderRoute() {
+    let hash = decodeURIComponent(location.hash.replace(/^#/, ''));
+    let slash = hash.indexOf('/');
+    let head = slash >= 0 ? hash.slice(0, slash) : hash;
+    let rest = slash >= 0 ? hash.slice(slash + 1) : '';
+
+    if (head == 'play' && rest) {
+      let item = this.items.find(i => i.record.id == rest);
+      if (item) {
+        if (!this.playing) this.play(item);
+        return;
+      }
+      // unknown id falls through to the library
+    }
+    // Leaving a running emulator requires a reload (emscripten runtimes don't tear down
+    // cleanly); the hash is already updated, so the library renders after the reload.
+    if (this.playing) { location.reload(); return; }
+    if (CollectionItem.platforms[head]) this.platform = head;
+    if (!this.querySelector('.platform-tabs')) this.render();
+    this.renderTabs();
+    this.renderGrid();
+    this.save();
+  }
+  render() {
+    this.innerHTML = `
+      <header>
+        <img src="../logos/emularity-transparent.png" alt="Emularity">
+        <p>Your personal software collection. Pick a platform, add software, click to play.</p>
+      </header>
+      <div class="platform-tabs"></div>
+      <div class="sort-bar"><label>Sort by <select class="sort-select"></select></label></div>
+      <div class="game-grid"></div>
+      <p class="empty-note" style="display: none">No software installed for this platform yet. Click "Add software" to get started.</p>
+      <emularity-add-dialog></emularity-add-dialog>
+      <emularity-edit-dialog></emularity-edit-dialog>`;
+    this.addDialog = this.querySelector('emularity-add-dialog');
+    this.addDialog.collection = this;
+    this.editDialog = this.querySelector('emularity-edit-dialog');
+
+    let sel = this.querySelector('.sort-select');
+    for (let key in EmularityCollection.SORTS) {
+      let opt = document.createElement('option');
+      opt.value = key;
+      opt.textContent = EmularityCollection.SORTS[key].label;
+      sel.appendChild(opt);
+    }
+    sel.addEventListener('change', () => { this.sort = sel.value; this.save(); this.renderGrid(); });
+
+    this.addCard = document.createElement('div');
+    this.addCard.className = 'game-card add-card';
+    this.addCard.textContent = '+ Add software';
+    this.addCard.addEventListener('click', () => this.addDialog.open(CollectionItem.platforms[this.platform]));
+  }
+  renderTabs() {
+    let tabs = this.querySelector('.platform-tabs');
+    tabs.innerHTML = '';
+    for (let [key, platform] of Object.entries(CollectionItem.platforms)) {
+      let btn = document.createElement('button');
+      btn.innerHTML = '<span class="label"></span><span class="sublabel"></span>';
+      btn.querySelector('.label').textContent = platform.label;
+      btn.querySelector('.sublabel').textContent = platform.sublabel;
+      if (key == this.platform) btn.classList.add('active');
+      btn.addEventListener('click', () => { location.hash = key; });
+      tabs.appendChild(btn);
+    }
+  }
+  /* Show the current platform's items, sorted. Items are long-lived elements, so this
+     only reorders them; nothing is rebuilt. */
+  renderGrid() {
+    let grid = this.querySelector('.game-grid');
+    if (this.playing || !grid) return;
+    let cmp = (EmularityCollection.SORTS[this.sort] || EmularityCollection.SORTS['added-desc']).cmp;
+    let items = this.items.filter(i => i.record.platform == this.platform).sort((a, b) => cmp(a.record, b.record));
+    grid.replaceChildren(...items, this.addCard);
+    this.querySelector('.sort-select').value = this.sort;
+    this.querySelector('.empty-note').style.display = items.length ? 'none' : 'block';
+    this.querySelector('.sort-bar').style.display = items.length ? '' : 'none';
+  }
+
+  /* ----- Playing ----- */
+
+  async play(item) {
+    this.playing = true;
+    this.platform = item.record.platform;
+    item.update({ lastPlayed: Date.now() });
+    let player = document.createElement('emularity-collection-player');
+    player.prefs = this.prefs;
+    player.addEventListener('prefschange', () => this.save());
+    try {
+      await player.load(item);
+    } catch (e) {
+      console.error(e);
+      alert(e.message);
+      this.playing = false;
+      history.replaceState(null, '', '#' + item.record.platform);
+      this.renderRoute();
+      return;
+    }
+    this.classList.add('playing');
+    this.replaceChildren(player);
   }
 }
 customElements.define('emularity-collection', EmularityCollection);
