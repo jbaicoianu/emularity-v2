@@ -152,8 +152,8 @@ export class V86Mouse {
     }
   }
   onButton(ev, down) {
-    let i = [0, 2, 1][ev.button]; // DOM: 0 left, 1 middle, 2 right
-    if (i === undefined) return;
+    let i = ev.button; // DOM and v86 both count 0 left, 1 middle, 2 right
+    if (i > 2) return;
     ev.preventDefault();
     this.canvas.focus();
     // A click that captures the mouse isn't passed on to the guest
@@ -171,6 +171,7 @@ export class V86Mouse {
   }
   onWheel(ev) {
     ev.preventDefault();
-    if (ev.deltaY) this.send('mouse-wheel', [Math.sign(ev.deltaY), 0]);
+    // v86 counts the old wheelDelta way (positive = up); deltaY is positive for down
+    if (ev.deltaY) this.send('mouse-wheel', [-Math.sign(ev.deltaY), 0]);
   }
 }
