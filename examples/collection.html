@@ -254,6 +254,27 @@
         width: 480px;
         max-width: 90vw;
       }
+      dialog.network-dialog {
+        width: 760px;
+      }
+      emularity-collection header {
+        position: relative;
+      }
+      emularity-collection header .network-button {
+        position: absolute;
+        top: 1em;
+        right: 0;
+        background: #1a1a1a;
+        color: #ccc;
+        border: 1px solid #333;
+        border-radius: 6px;
+        padding: .4em .8em;
+        cursor: pointer;
+      }
+      emularity-collection header .network-button:hover {
+        border-color: #5ab8c8;
+        color: #fff;
+      }
       dialog::backdrop {
         background: rgba(0, 0, 0, .7);
       }
@@ -277,6 +298,9 @@
         border-bottom: 1px solid #333;
         margin-bottom: 1em;
       }
+      .add-tabs .source-tabs {
+        display: contents; /* its buttons are tabs like the rest */
+      }
       .add-tabs button {
         background: none;
         border: none;
@@ -296,7 +320,7 @@
         font-size: .9em;
         color: #aaa;
       }
-      dialog input[type="text"], dialog input[type="url"], dialog input[type="file"], dialog input[type="search"] {
+      dialog input[type="text"], dialog input[type="url"], dialog input[type="file"], dialog input[type="search"], dialog select {
         display: block;
         width: 100%;
         box-sizing: border-box;
@@ -372,8 +396,25 @@
         border-bottom: 1px solid #222;
         cursor: pointer;
       }
+      .search-result.added .result-title::after {
+        content: '  ✓ Added';
+        color: #5ab8c8;
+        font-weight: normal;
+      }
+      dialog .added-note {
+        color: #5ab8c8;
+        font-size: .85em;
+        margin: .5em 0 0;
+      }
+      dialog .added-note:empty {
+        display: none;
+      }
       .search-result:hover {
         background: #161c1d;
+      }
+      .search-result > div {
+        min-width: 0; /* long identifiers wrap instead of widening the list */
+        overflow-wrap: anywhere;
       }
       .search-result img {
         width: 48px;
@@ -450,6 +491,127 @@
         font-size: 1em;
         line-height: 1;
       }
+      .player-bar .pb-media-wrap {
+        position: relative;
+      }
+      .player-bar .pb-media-popup {
+        position: absolute;
+        top: calc(100% + .4em);
+        right: 0;
+        z-index: 50;
+        min-width: 16em;
+        max-width: min(24em, 90vw);
+        background: #1a1a1a;
+        border: 1px solid #444;
+        border-radius: 6px;
+        padding: .35em;
+        box-shadow: 0 4px 12px rgba(0,0,0,.5);
+      }
+      .player-bar .pb-media-popup .pbm-drive + .pbm-drive {
+        border-top: 1px solid #333;
+        margin-top: .3em;
+        padding-top: .3em;
+      }
+      .player-bar .pb-media-popup .pbm-head {
+        padding: .35em .6em;
+        font-size: .85em;
+        color: #aaa;
+        overflow-wrap: anywhere;
+      }
+      .player-bar .pb-media-popup .pbm-head b {
+        color: #ddd;
+      }
+      .player-bar .pb-media-popup button {
+        display: block;
+        width: 100%;
+        min-width: 0;
+        text-align: left;
+        border: none;
+        padding: .45em .6em;
+        font-size: .85em;
+        line-height: 1.3;
+        overflow-wrap: anywhere;
+      }
+      .player-bar .pb-media-popup button:hover:not(:disabled) {
+        background: #262c2d;
+      }
+      .player-bar .pb-media-popup button:disabled {
+        color: #49c8d7;
+        cursor: default;
+      }
+      .player-bar .pb-media-popup .pbm-later {
+        color: #888;
+      }
+      .player-bar .pb-media-popup .pbm-hint {
+        margin: .4em .6em .2em;
+        font-size: .8em;
+        color: #888;
+      }
+      .player-bar .pb-media-popup .pbm-note {
+        margin: .3em .6em;
+        font-size: .85em;
+        color: #e8b86b;
+      }
+      dialog fieldset {
+        border: 1px solid #333;
+        border-radius: 6px;
+        margin: .8em 0;
+        padding: .6em .8em;
+      }
+      dialog legend {
+        color: #aaa;
+        padding: 0 .3em;
+      }
+      dialog .disk-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: .4em;
+        margin-bottom: .4em;
+      }
+      dialog .disk-row .disk-name {
+        flex: 1 1 10em;
+        min-width: 0;
+        margin: 0;
+      }
+      dialog .disk-row select {
+        width: auto;
+        margin: 0;
+      }
+      dialog .disk-row label {
+        display: inline-flex;
+        align-items: center;
+        gap: .3em;
+        margin: 0;
+        font-size: .85em;
+        white-space: nowrap;
+      }
+      dialog .disk-row .disk-remove, dialog .disk-add button {
+        background: none;
+        border: 1px solid #444;
+        border-radius: 4px;
+        color: #ddd;
+        padding: .3em .6em;
+        cursor: pointer;
+      }
+      dialog .disk-row .disk-remove:hover {
+        color: #f66;
+        border-color: #f66;
+      }
+      dialog .disk-add input[hidden] {
+        display: none;
+      }
+      dialog .disk-add {
+        display: flex;
+        flex-wrap: wrap;
+        gap: .4em;
+        align-items: center;
+      }
+      dialog .disk-add input[type="url"] {
+        flex: 1 1 10em;
+        min-width: 0;
+        margin: 0;
+      }
       .player-bar .pb-controls button.active {
         border-color: #49c8d7;
         color: #49c8d7;
@@ -511,7 +673,9 @@
     </style>
   </head>
   <body>
-    <emularity-collection></emularity-collection>
+    <!-- uplink: settings for the virtual LAN's internet uplink (server, login), if any;
+         see uplink.example.json -->
+    <emularity-collection uplink="uplink.json"></emularity-collection>
 
 
     <script>
@@ -585,7 +749,7 @@ class ArchiveOrg {
     let meta = data.metadata || {};
     let ext = (meta.emulator_ext || '').toLowerCase();
     let file = ext ? data.files.find(f => f.name.toLowerCase().endsWith('.' + ext)) : null;
-    if (!file) file = data.files.find(f => /\.(zip|dsk|do|po|nib|woz|img|ima)$/i.test(f.name));
+    if (!file) file = data.files.find(f => /\.(zip|dsk|do|po|nib|woz|img|ima|nes|fds)$/i.test(f.name));
     if (!file) throw new Error('No usable software file found in this item');
     return {
       title: (Array.isArray(meta.title) ? meta.title[0] : meta.title) || identifier,
@@ -799,6 +963,14 @@ class ZipExtractor {
     }
   }
   /* Stream one entry's compressed bytes -> inflate -> file */
+  /* One entry's contents, as a Blob */
+  static async entryBlob(blob, en) {
+    let lh = new DataView(await blob.slice(en.localOffset, en.localOffset + 30).arrayBuffer());
+    let dataStart = en.localOffset + 30 + lh.getUint16(26, true) + lh.getUint16(28, true);
+    let src = blob.slice(dataStart, dataStart + en.compSize);
+    if (en.method === 0) return src;
+    return new Response(src.stream().pipeThrough(new DecompressionStream('deflate-raw'))).blob();
+  }
   static async extractEntry(blob, en) {
     // The central directory points at the local header, whose name/extra lengths can
     // differ from the central record, so read them here to find where data begins.
@@ -866,6 +1038,8 @@ class ZipExtractor {
       let extraLen = cd.getUint16(p + 30, true);
       let commentLen = cd.getUint16(p + 32, true);
       let localOffset = cd.getUint32(p + 42, true);
+      let time = cd.getUint16(p + 12, true), date = cd.getUint16(p + 14, true);
+      let mtime = new Date(1980 + (date >> 9), ((date >> 5) & 15) - 1, date & 31, time >> 11, (time >> 5) & 63, (time & 31) * 2).getTime();
       let name = dec.decode(new Uint8Array(cdBuf, p + 46, nameLen));
       if (compSize === 0xffffffff || uncompSize === 0xffffffff || localOffset === 0xffffffff) { // ZIP64 extra
         let ep = p + 46 + nameLen, eend = ep + extraLen;
@@ -880,7 +1054,7 @@ class ZipExtractor {
           ep += 4 + sz;
         }
       }
-      entries.push({ name, method, compSize, uncompSize, localOffset });
+      entries.push({ name, method, compSize, uncompSize, localOffset, mtime });
       p += 46 + nameLen + extraLen + commentLen;
     }
     return entries;
@@ -986,6 +1160,113 @@ class AudioMute {
 AudioMute.install();
 
 
+/* ===== Software sources =====
+
+   Where the add dialog finds software for a platform. Each platform lists its sources
+   (`static sources` on its item class) and the dialog shows a tab for each, all
+   sharing the same search-and-pick UI. A source finds titles and turns the one picked
+   into a collection record:
+     label, hint      the tab's name, and a line explaining the results
+     filter           optional text shown as a fixed part of the search
+     search(text, page)   -> { results: [{ title, detail, thumb }], total }
+     toRecord(result)     -> the new item's record fields (title, source, url, ...) */
+class SoftwareSource {
+  label = '';
+  hint = '';
+  filter = '';
+  async search(text, page) { return { results: [], total: 0 }; }
+  async toRecord(result) { throw new Error('not implemented'); }
+}
+
+/* archive.org's software library, narrowed by an advancedsearch query (e.g.
+   "emulator:(dosbox)") */
+class ArchiveOrgSource extends SoftwareSource {
+  label = 'Search archive.org';
+  hint = "Results from archive.org's software library. Click one to add it to your collection.";
+
+  constructor(query) {
+    super();
+    this.filter = query;
+  }
+  async search(text, page) {
+    let { docs, total } = await ArchiveOrg.search(this.filter + (text ? ' ' + text : ''), page);
+    return {
+      total,
+      results: docs.map(doc => ({
+        title: Array.isArray(doc.title) ? doc.title[0] : (doc.title || doc.identifier),
+        detail: doc.identifier + (doc.year ? ' · ' + doc.year : ''),
+        thumb: ArchiveOrg.thumbUrl(doc.identifier),
+        doc,
+      })),
+    };
+  }
+  async toRecord({ doc }) {
+    let identifier = doc.identifier, resolved = await ArchiveOrg.resolveItem(identifier);
+    return {
+      title: resolved.title,
+      source: 'url',
+      url: resolved.url,
+      filename: resolved.filename,
+      exe: resolved.exe,
+      identifier,
+      thumb: ArchiveOrg.thumbUrl(identifier),
+      rating: doc.avg_rating != null ? +doc.avg_rating : 0,
+      size: resolved.size,
+    };
+  }
+}
+
+/* The machines from copy.sh/v86's demo page: complete v86 configurations (disk images,
+   memory, kernel command line, ...), imported by tools/import-v86-catalog.mjs.
+   Image URLs in the catalog start with "{host}", replaced by `host`: the images are
+   copy.sh's, and i.copy.sh refuses requests referred by other sites, so locally they
+   go through v86-proxy.py's /copysh/ route. A public deployment should point this at
+   its own mirror (or have copy.sh's blessing). */
+class V86CatalogSource extends SoftwareSource {
+  static host = '/copysh/';
+  label = 'copy.sh/v86 machines';
+  hint = 'Operating systems and demos from the copy.sh/v86 project. Click one to add it to your collection.';
+
+  constructor(url) {
+    super();
+    this.url = url;
+  }
+  load() {
+    return this.catalog ??= fetch(this.url).then(res => {
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return res.json();
+    }).catch(e => { this.catalog = null; throw e; }); // retry next time
+  }
+  static MEDIA = { cdrom: 'CD-ROM', hda: 'hard disk', fda: 'floppy', bzimage: 'Linux kernel', multiboot: 'multiboot kernel', filesystem: '9p filesystem' };
+  /* The machine's boot media, and their total size */
+  static describe(config) {
+    let kinds = Object.keys(this.MEDIA).filter(k => config[k]);
+    let size = ['cdrom', 'hda', 'hdb', 'fda', 'fdb', 'bzimage', 'initrd', 'multiboot'].reduce((sum, k) => sum + (config[k]?.size || 0), 0);
+    return { kinds, size: size || undefined };
+  }
+  async search(text, page) {
+    let { machines } = await this.load();
+    let words = text.toLowerCase().split(/\s+/).filter(Boolean);
+    let results = machines
+      .filter(m => words.every(w => (m.name + ' ' + m.id).toLowerCase().includes(w)))
+      .map(m => {
+        let { kinds, size } = V86CatalogSource.describe(m.config);
+        let detail = kinds.map(k => V86CatalogSource.MEDIA[k]).join(' + ') + (size ? ' · ' + Format.bytes(size) : '');
+        return { title: m.name, detail, machine: m };
+      });
+    return { results, total: results.length }; // the whole (small) list in one page
+  }
+  async toRecord({ machine }) {
+    let config = JSON.parse(JSON.stringify(machine.config).replaceAll('{host}', V86CatalogSource.host));
+    let { kinds, size } = V86CatalogSource.describe(config);
+    let main = config[kinds[0]];
+    // e.g. "{host}haiku-v5/.img" (split into parts) -> "haiku-v5.img"
+    let filename = (main.url || main.baseurl || machine.id).replace(/\/(\.[^/]*)?$/, '$1').split('/').pop();
+    return { title: machine.name, source: 'catalog', catalog: 'copy.sh/v86', machine: machine.id, filename, size, homepage: machine.homepage, v86opts: config };
+  }
+}
+
+
 /* ===== Collection items =====
 
    One element per title in the collection, which doubles as its card in the grid.
@@ -998,6 +1279,8 @@ AudioMute.install();
    themselves, so they work whether or not they're currently in the grid:
      itemchange  the record changed and should be saved
      itemedit    the user asked to edit the item's info
+     iteminstance  the user asked for a new instance of it (the same software, with
+                 saves and changes of its own)
      itemremove  the item was removed from the collection
      menuopen    this item's menu opened (others should close) */
 class CollectionItem extends HTMLElement {
@@ -1007,12 +1290,16 @@ class CollectionItem extends HTMLElement {
   static key = null;
   static label = '';
   static sublabel = '';
-  static query = '';        // archive.org search filter for this platform's software
+  static sources = [];      // where the add dialog finds software (SoftwareSource)
   static accept = '';       // file types for the upload picker
   static hint = '';         // what kind of file the platform wants
   static exeField = false;  // whether titles have a "program to run"
   static captureMouseField = false; // whether titles can capture the mouse on click
+  static networkField = false; // whether titles can join the virtual LAN
+  static cores = null;      // { id: label } of emulator cores to choose from, if any
   static onscreenKeyboard = true;
+  static mediaDrives = null; // { drive: { label, kind } } removable drives titles keep disks for
+  static mediaAccept = { floppy: '.img,.ima,.flp,.vfd,.dsk,.zip', cdrom: '.iso,.cue,.bin,.zip' };
 
   static register(tag) {
     CollectionItem.platforms[this.key] = this;
@@ -1029,6 +1316,10 @@ class CollectionItem extends HTMLElement {
 
   record = null;
 
+  // The name the machine is known by on the virtual LAN
+  get hostname() {
+    return this.record.hostname || this.record.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'host';
+  }
   get archiveId() { return this.record.identifier || ArchiveOrg.idFromUrl(this.record.url); }
   get thumb() {
     let id = this.archiveId;
@@ -1045,6 +1336,9 @@ class CollectionItem extends HTMLElement {
     let base = r.title.replace(/[^a-z0-9 ._-]/gi, '_').replace(/[. ]+$/, '').trim() || r.id;
     return base + ext;
   }
+  // The software is one file (a URL or an upload), as opposed to e.g. a full machine
+  // configuration; only then can it be cached or cloned
+  get isSingleFile() { return !!this.record.url || this.record.source == 'upload'; }
   get hasLocalCopy() {
     let r = this.record;
     return !!((r.cloned && r.diskName) || r.cached || r.source == 'upload');
@@ -1054,6 +1348,190 @@ class CollectionItem extends HTMLElement {
     return r.installed ? '🖴 Installed to disk' : r.cloned ? '💾 On disk' : r.cached ? '📥 Cached on device' : '';
   }
   canInstall() { return false; }
+
+  /* ----- Disks -----
+     A title's set of floppies and CDs (record.media: [{ id, name, drive, url | upload,
+     format }]), with record.inserted saying which is in each drive at power on
+     ({ drive: id }). Uploaded disks are stored by their id.
+
+     A disk is a disk image, or files that become one for whichever drive it goes in (a
+     floppy or a CD image; see disk-builder.js): a zip (format 'zip'), or a folder
+     (format 'folder', stored as [{ path, file }]). A bin/cue is the cue sheet and the
+     files it names (format 'cue', stored like a folder), read in place (see cue.js); a
+     zip or folder holding one is read the same way when it goes in a CD drive. */
+
+  get disks() { return this.record.media || []; }
+  get inserted() { return this.record.inserted || {}; }
+  /* Whether a disk can go in a drive */
+  diskFits(disk, drive) {
+    let drives = this.constructor.mediaDrives || {};
+    if (!drives[drive]) return false;
+    if (disk.format == 'cue') return drives[drive].kind == 'cdrom';
+    return disk.format == 'zip' || disk.format == 'folder' || (drives[disk.drive] && drives[disk.drive].kind == drives[drive].kind);
+  }
+  /* The drive a disk probably goes in: from an image's name, or for files, the floppy
+     drive if they fit on a floppy (`size` is their total) */
+  driveFor(name, size) {
+    let drives = this.constructor.mediaDrives || {};
+    let kind = size != null ? (size <= 1400 * 1024 ? 'floppy' : 'cdrom') : /\.(iso|cue|bin)$/i.test(name) ? 'cdrom' : 'floppy';
+    return Object.keys(drives).find(d => drives[d].kind == kind) || Object.keys(drives)[0];
+  }
+  /* Add a disk: an image or zip ({ name, file | url }), or a folder or bin/cue ({ name,
+     files: [{ path, file }], format }) */
+  async addDisk({ name, file, url, files, format, drive }) {
+    let disk = { id: 'disk-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7), name };
+    let size = null;
+    if (files) {
+      disk.format = format || 'folder';
+      size = files.reduce((n, f) => n + f.file.size, 0);
+      await LocalStore.uploadPut(disk.id, files);
+      disk.upload = true;
+    } else {
+      if (/\.zip$/i.test(name)) {
+        disk.format = 'zip';
+        if (file) size = (await ZipExtractor.parseEntries(file)).reduce((n, e) => n + e.uncompSize, 0);
+      }
+      if (file) { await LocalStore.uploadPut(disk.id, file); disk.upload = true; }
+      else disk.url = url;
+    }
+    disk.drive = drive || this.driveFor(name, disk.format ? size ?? Infinity : null);
+    this.update({ media: [...this.disks, disk] });
+    return disk;
+  }
+  async removeDisk(id) {
+    let disk = this.disks.find(d => d.id == id);
+    if (disk && disk.upload) { try { await LocalStore.uploadDelete(id); } catch (e) { console.error(e); } }
+    let inserted = { ...this.inserted };
+    for (let d in inserted) if (inserted[d] == id) delete inserted[d];
+    this.update({ media: this.disks.filter(d => d.id != id), inserted });
+  }
+  updateDisk(id, fields) {
+    let inserted = { ...this.inserted };
+    if ('drive' in fields) for (let d in inserted) if (inserted[d] == id && d != fields.drive) delete inserted[d];
+    this.update({ media: this.disks.map(d => d.id == id ? { ...d, ...fields } : d), inserted });
+  }
+  /* Record what's in a drive, so it's still there next time */
+  setInserted(drive, id) {
+    let inserted = { ...this.inserted };
+    for (let d in inserted) if (inserted[d] == id) delete inserted[d];
+    if (id) inserted[drive] = id; else delete inserted[drive];
+    this.update({ inserted });
+  }
+  /* A disk as the emulator takes it for a drive: { id, name, drive, blob | url }, and
+     for a bin/cue, cue: { text, files: [{ name, blob }] } with the files as the cue
+     names them, for emulators that read cue sheets themselves */
+  async diskMedia(disk, drive = disk.drive) {
+    let media = { id: disk.id, name: disk.name, drive };
+    let cd = this.constructor.mediaDrives[drive].kind == 'cdrom';
+    if (disk.format == 'cue' || ((disk.format == 'zip' || disk.format == 'folder') && cd)) {
+      let files = await this.diskFiles(disk);
+      if (files.some(f => /\.cue$/i.test(f.path))) return { ...media, ...await CollectionItem.cueMedia(files) };
+    }
+    if (disk.format == 'zip' || disk.format == 'folder') return { ...media, blob: await this.builtDisk(disk, drive) };
+    if (!disk.upload) return { ...media, url: disk.url };
+    let blob = await LocalStore.uploadGet(disk.id);
+    if (!blob) throw new Error(`The disk "${disk.name}" is missing from browser storage. Remove it and add it again.`);
+    // A .bin without its cue: raw sectors, or an ISO by another name
+    if (cd && /\.bin$/i.test(disk.name)) {
+      let { binImage } = await import('../src/emulators/cue.js');
+      let image = await binImage(blob, disk.name);
+      if (image.size == blob.size) return { ...media, blob: image };
+      let text = `FILE "cd.bin" BINARY\n  TRACK 01 ${image.mode}\n    INDEX 01 00:00:00\n`;
+      return { ...media, blob: image, cue: { text, files: [{ name: 'cd.bin', blob }] } };
+    }
+    return { ...media, blob };
+  }
+  /* A bin/cue's media, from its files ([{ path, blob }]) */
+  static async cueMedia(files) {
+    let { cueImage, parseCue } = await import('../src/emulators/cue.js');
+    let cue = files.find(f => /\.cue$/i.test(f.path));
+    let text = await cue.blob.text(), dir = cue.path.replace(/[^\/]*$/, '');
+    // Cue sheets name their files loosely: relative to the cue, in any case, with
+    // backslashes, or with a path from the machine they were made on
+    let find = name => {
+      let want = name.replace(/\\/g, '/').toLowerCase(), base = want.split('/').pop();
+      let match = files.find(f => f.path.toLowerCase() == (dir + want).toLowerCase())
+        || files.find(f => f.path.toLowerCase().split('/').pop() == base);
+      return match ? match.blob : null;
+    };
+    let named = [];
+    for (let { name } of parseCue(text)) {
+      let blob = find(name);
+      if (!blob) throw new Error(`"${name}", which the cue sheet ${cue.path} names, is missing`);
+      named.push({ name, blob });
+    }
+    return { blob: cueImage(text, find, cue.path.replace(/\.cue$/i, '.iso')), cue: { text, files: named } };
+  }
+  /* Files picked together, as disks to add: a cue sheet goes with the files it names;
+     anything else is a disk of its own */
+  static async groupFiles(fileList) {
+    let { parseCue } = await import('../src/emulators/cue.js');
+    let rest = [...fileList], disks = [];
+    for (let cue of rest.filter(f => /\.cue$/i.test(f.name))) {
+      let files = [{ path: cue.name, file: cue }];
+      for (let { name } of parseCue(await cue.text())) {
+        let base = name.replace(/\\/g, '/').split('/').pop();
+        let file = rest.find(f => f.name.toLowerCase() == base.toLowerCase());
+        if (!file) throw new Error(`Pick ${cue.name} together with the file it names, "${base}"`);
+        if (!files.some(x => x.file == file)) files.push({ path: file.name, file });
+      }
+      rest = rest.filter(f => !files.some(x => x.file == f));
+      disks.push({ name: cue.name, files, format: 'cue' });
+    }
+    return disks.concat(rest.map(file => ({ name: file.name, file })));
+  }
+  /* A zip or folder disk's files: [{ path, blob, mtime }] */
+  async diskFiles(disk) {
+    let stored = disk.upload ? await LocalStore.uploadGet(disk.id) : null;
+    if (disk.upload && !stored) throw new Error(`The disk "${disk.name}" is missing from browser storage. Remove it and add it again.`);
+    if (disk.format == 'folder' || disk.format == 'cue') return stored.map(({ path, file }) => ({ path, blob: file, mtime: file.lastModified }));
+    let zip = stored || await LocalStore.fetchBlob(disk.url);
+    let files = [];
+    for (let en of await ZipExtractor.parseEntries(zip)) {
+      let path = en.name.replace(/\\/g, '/');
+      if (path.endsWith('/')) continue;
+      files.push({ path, blob: await ZipExtractor.entryBlob(zip, en), mtime: en.mtime });
+    }
+    return files;
+  }
+  /* A zip or folder disk built as an image for a drive (kept for the session) */
+  builtDisk(disk, drive) {
+    let kind = this.constructor.mediaDrives[drive].kind, key = disk.id + ':' + kind;
+    let cache = CollectionItem.builtDisks ||= new Map();
+    if (!cache.has(key)) {
+      cache.set(key, (async () => {
+        let { buildFloppy, buildIso } = await import('../src/emulators/disk-builder.js');
+        let files = await this.diskFiles(disk), label = disk.name.replace(/\.zip$/i, '');
+        return kind == 'cdrom' ? buildIso(files, { label }) : buildFloppy(files, { label });
+      })());
+      cache.get(key).catch(() => cache.delete(key));
+    }
+    return cache.get(key);
+  }
+  /* A folder chosen with <input webkitdirectory>, as addDisk() takes it */
+  static folderDisk(fileList) {
+    let list = [...fileList], top = list.length ? list[0].webkitRelativePath.split('/')[0] : 'Folder';
+    return { name: top, files: list.map(file => ({ path: file.webkitRelativePath.split('/').slice(1).join('/'), file })) };
+  }
+  /* The disks in the drives at power on */
+  async bootMedia() {
+    let inserted = this.inserted;
+    let disks = Object.entries(inserted).map(([drive, id]) => {
+      let disk = this.disks.find(d => d.id == id);
+      return disk && { ...disk, drive };
+    }).filter(Boolean);
+    return this.mediaFor(disks);
+  }
+  /* Disks as the emulator takes them. One that can't be had (missing, or too big for a
+     floppy) is left out with a warning, rather than stopping the machine booting. */
+  async mediaFor(disks) {
+    let out = [];
+    for (let d of disks) {
+      try { out.push(await this.diskMedia(d)); }
+      catch (e) { console.warn(`Emularity: leaving out the disk "${d.name}":`, e.message); }
+    }
+    return out;
+  }
 
   /* Fill in fields that older saved records lack. Returns true if anything changed. */
   normalize() {
@@ -1151,10 +1629,11 @@ class CollectionItem extends HTMLElement {
     if (disk && this.canInstall()) {
       actions.push(['menu-install', r.installed ? '🖴 Uninstall from disk' : '🖴 Install to disk…', () => r.installed ? this.uninstall() : this.install()]);
     }
-    actions.push(['menu-cache', r.cached ? '📥 Remove from device' : '📥 Cache on device', () => r.cached ? this.uncache() : this.cache()]);
-    if (disk) {
+    if (this.isSingleFile) actions.push(['menu-cache', r.cached ? '📥 Remove from device' : '📥 Cache on device', () => r.cached ? this.uncache() : this.cache()]);
+    if (disk && this.isSingleFile) {
       actions.push(['menu-clone', r.cloned ? '💾 Remove disk clone' : '💾 Clone to disk…', () => r.cloned ? this.unclone() : this.clone()]);
     }
+    actions.push(['menu-instance', '⧉ New instance…', () => this.emit('iteminstance')]);
     actions.push(['menu-reset', '⟲ Reset saved data', () => this.resetSaves()]);
     actions.push(['menu-delete', '✕ Remove from collection', () => this.removeFromCollection()]);
     return actions;
@@ -1284,6 +1763,7 @@ class CollectionItem extends HTMLElement {
     if (r.source == 'upload') { try { await LocalStore.uploadDelete(r.id); } catch (e) { console.error(e); } }
     if (r.cached) await LocalStore.cacheDelete(r.id);
     if (r.cloned && r.diskName) await LocalStore.diskDelete(r.diskName);
+    for (let disk of this.disks) if (disk.upload) { try { await LocalStore.uploadDelete(disk.id); } catch (e) { console.error(e); } }
   }
 
   /* ----- Playing ----- */
@@ -1329,10 +1809,24 @@ class DosItem extends CollectionItem {
   static key = 'dos';
   static label = 'IBM PC';
   static sublabel = 'DOSBox';
-  static query = 'emulator:(dosbox)';
+  static sources = [new ArchiveOrgSource('emulator:(dosbox)')];
   static accept = '.zip,.img,.ima';
   static hint = 'A zip file, mounted as drive C:';
   static exeField = true;
+  static mediaDrives = {
+    fda: { label: 'Floppy A:', kind: 'floppy' },
+    fdb: { label: 'Floppy B:', kind: 'floppy' },
+    cdrom: { label: 'CD-ROM D:', kind: 'cdrom' },
+  };
+
+  /* DOSBox mounts every disk at power on (and swaps between them), with each drive's
+     inserted disk first */
+  async bootMedia() {
+    let inserted = this.inserted;
+    let disks = this.disks.filter(d => this.constructor.mediaDrives[d.drive]);
+    disks.sort((a, b) => (inserted[b.drive] == b.id) - (inserted[a.drive] == a.id));
+    return this.mediaFor(disks);
+  }
 
   // "Install to disk" extracts the zip into a working folder, so it only applies to
   // zip-based titles; raw disk images stay on Clone/Cache.
@@ -1456,6 +1950,7 @@ class DosItem extends CollectionItem {
   async createEmulator() {
     let r = this.record;
     let emu = await this.newEmulator('emularity-dosbox', '../emulators/dosbox');
+    emu.media = await this.bootMedia();
     // Append `exit` so DOSBox quits when the program exits (fires the emulator's exit
     // event) instead of dropping the user to a bare DOS prompt.
     if (r.exe) emu.setAttribute('exe', this.autoexec + '\nexit');
@@ -1472,10 +1967,14 @@ class DosItem extends CollectionItem {
       let drive = document.createElement('emularity-dosbox-drive');
       drive.setAttribute('letter', 'c');
       emu.appendChild(drive);
+    } else if (/\.(img|ima)$/i.test(r.filename)) {
+      // A floppy image: in drive A: (after any disk chosen for it, as A:'s first)
+      let blob = await this.media(), main = { id: 'main', name: r.filename || r.title, drive: 'fda' };
+      if (blob) main.blob = blob; else main.url = r.url;
+      emu.media = this.inserted.fda ? [...emu.media, main] : [main, ...emu.media];
     } else {
-      let floppy = /\.(img|ima)$/i.test(r.filename);
-      let media = document.createElement(floppy ? 'emularity-dosbox-floppy' : 'emularity-dosbox-drive');
-      media.setAttribute('letter', floppy ? 'a' : 'c');
+      let media = document.createElement('emularity-dosbox-drive');
+      media.setAttribute('letter', 'c');
       media.setAttribute('url', await this.mediaURL());
       media.setAttribute('label', r.title);
       emu.appendChild(media);
@@ -1488,7 +1987,7 @@ class Apple2eItem extends CollectionItem {
   static key = 'apple2e';
   static label = 'Apple IIe';
   static sublabel = 'MAME';
-  static query = 'emulator:(apple2ee)';
+  static sources = [new ArchiveOrgSource('emulator:(apple2ee)')];
   static accept = '.dsk,.do,.po,.nib,.woz';
   static hint = 'A floppy disk image (.dsk, .do, .po, .nib, .woz)';
 
@@ -1519,11 +2018,17 @@ class X86Item extends CollectionItem {
   static key = 'x86';
   static label = 'x86 PC';
   static sublabel = 'v86';
-  static query = 'emulator:(v86)';
+  static sources = [new V86CatalogSource('../emulators/v86/catalog.json'), new ArchiveOrgSource('emulator:(v86)')];
   static accept = '.iso,.img,.raw,.qcow2,.hdd,.bin';
   static hint = 'A bootable CD-ROM (.iso) or hard-disk image (.img). Boots a full x86 PC — e.g. a Linux install/live disc.';
   static onscreenKeyboard = false; // v86 takes input on its own canvas
   static captureMouseField = true;
+  static networkField = true;
+  static mediaDrives = {
+    fda: { label: 'Floppy A:', kind: 'floppy' },
+    fdb: { label: 'Floppy B:', kind: 'floppy' },
+    cdrom: { label: 'CD-ROM', kind: 'cdrom' },
+  };
 
   /* Starter content: two bundled demos, a graphical TinyCore desktop and a tiny
      serial-console Linux shell */
@@ -1535,18 +2040,80 @@ class X86Item extends CollectionItem {
         url: '../emulators/v86/images/linux4.iso', filename: 'linux4.iso', console: 'serial', added: Date.now() - 1 },
     ];
   }
-  /* Arch Linux booting from copy.sh's lazily-streamed 9p rootfs. Root-relative URLs
-     resolve to the current origin, so this only works behind the local v86-proxy.py
-     (which bridges to i.copy.sh). Added by opening collection.html?addarch. */
-  static archRecord() {
-    return {
-      id: 'arch-linux', platform: 'x86', title: 'Arch Linux', source: 'url', filename: 'arch', added: Date.now(),
-      v86opts: {
-        filesystem: { baseurl: '/arch/', basefs: { url: '/fs.json' } },
-        cmdline: 'rw apm=off vga=0x344 video=vesafb:ypan,vremap:8 root=host9p rootfstype=9p rootflags=trans=virtio,cache=loose mitigations=off audit=0 init_on_free=on tsc=reliable random.trust_cpu=on nowatchdog init=/usr/bin/init-openrc net.ifnames=0 biosdevname=0',
-        bzimage_initrd_from_filesystem: true, net_device_type: 'virtio',
-      },
-    };
+  normalize() {
+    let changed = super.normalize(), r = this.record;
+    // Older Arch records: an option v86 never read (so the guest got an NE2000 it has
+    // no driver loaded for), and seed files from a removed experiment
+    if (r.v86opts && r.v86opts.net_device_type) {
+      r.v86opts.net_device = { type: r.v86opts.net_device_type };
+      delete r.v86opts.net_device_type;
+      changed = true;
+    }
+    if (r.bootfiles) { delete r.bootfiles; changed = true; }
+    // The Arch item from the old ?addarch trigger: copy.sh paths moved under /copysh/
+    let fs = r.v86opts && r.v86opts.filesystem;
+    if (fs && fs.baseurl == '/arch/') {
+      fs.baseurl = V86CatalogSource.host + 'arch/';
+      if (fs.basefs) fs.basefs.url = V86CatalogSource.host + 'fs.json';
+      r.source = 'catalog';
+      changed = true;
+    }
+    return changed;
+  }
+
+  /* ----- Hard disk size -----
+     A new instance can have a bigger hard disk than the original. Its FAT16 partition
+     is repacked onto a disk of the new size (see fat-repack.js), stored once as the
+     packed data at its front (record.disk: { template, size }); instances of the same
+     disk at the same size share it. Untouched space reads as zeros, so only what's
+     written takes room. */
+
+  /* Where the hard disk comes from, for resizing: something imageReader() reads, or
+     null if this title has no hard disk image */
+  async hardDiskSource() {
+    let r = this.record;
+    if (r.disk) return this.hardDiskFile();
+    if (r.v86opts) return r.v86opts.hda && r.v86opts.hda.url ? r.v86opts.hda : null;
+    if (!/\.(img|raw|hdd|bin)$/i.test(r.filename || '') || r.imagetype && r.imagetype != 'hda') return null;
+    return (await this.media()) || r.url;
+  }
+  /* Identifies the source disk, for sharing built disks */
+  get hardDiskKey() {
+    let r = this.record;
+    if (r.disk) return r.disk.template;
+    if (r.v86opts) return r.v86opts.hda && r.v86opts.hda.url;
+    return r.source == 'upload' ? 'upload:' + r.id : r.url;
+  }
+  /* The hard disk's size in bytes, when known */
+  get hardDiskSize() {
+    let r = this.record;
+    return r.disk ? r.disk.size : r.v86opts ? r.v86opts.hda && r.v86opts.hda.size : (r.filename && /\.(img|raw|hdd|bin)$/i.test(r.filename) && r.size) || null;
+  }
+  get canResizeDisk() {
+    let r = this.record;
+    return !!(r.disk || (r.v86opts ? r.v86opts.hda && r.v86opts.hda.url : /\.(img|raw|hdd|bin)$/i.test(r.filename || '')));
+  }
+  async hardDiskFile() {
+    let { sparseFile } = await import('../src/emulators/disk-image.js');
+    let prefix = await LocalStore.uploadGet(this.record.disk.template);
+    if (!prefix) throw new Error("This machine's hard disk is missing from browser storage.");
+    return sparseFile(prefix, this.record.disk.size, 'hda.img');
+  }
+  /* Build (or find) this title's hard disk at a new size: { template, size } */
+  async buildDisk(size, onProgress) {
+    let { repackFat16, roundDiskSize } = await import('../src/emulators/fat-repack.js');
+    let { imageReader } = await import('../src/emulators/disk-image.js');
+    let key = this.hardDiskKey, hash = 0;
+    for (let i = 0; i < key.length; i++) hash = (hash * 31 + key.charCodeAt(i)) | 0;
+    let template = 'hdd-' + (hash >>> 0).toString(36) + '-' + Math.round(size / 1048576) + 'm';
+    // Built before (for another instance)? The same size always gives the same disk.
+    if (await LocalStore.uploadGet(template)) return { template, size: roundDiskSize(size) };
+    let read = imageReader(await this.hardDiskSource());
+    let disk = await repackFat16({ read, size, onProgress });
+    let blob = new Blob(disk.parts);
+    if (navigator.storage && navigator.storage.persist) navigator.storage.persist();
+    await LocalStore.uploadPut(template, blob);
+    return { template, size: disk.byteLength };
   }
 
   async createEmulator() {
@@ -1555,8 +2122,19 @@ class X86Item extends CollectionItem {
     if (r.memory) emu.setAttribute('memory', String(r.memory));
     if (r.console) emu.setAttribute('console', r.console); // 'serial' for serial-only images
     if (r.captureMouse) emu.setAttribute('capturemouse', '');
+    if (r.network) {
+      emu.setAttribute('network', r.network);
+      emu.setAttribute('hostname', this.hostname);
+      emu.setAttribute('label', r.title);
+      let uplink = document.querySelector('emularity-collection')?.getAttribute('uplink');
+      if (uplink) emu.setAttribute('uplink', uplink);
+    }
     emu.imagename = r.filename || '';
-    if (r.v86opts) {
+    emu.media = await this.bootMedia();
+    if (r.disk) {
+      // A hard disk built bigger than the original (see buildDisk)
+      emu.v86opts = { ...(r.v86opts || {}), hda: { buffer: await this.hardDiskFile(), async: true } };
+    } else if (r.v86opts) {
       // A full distro: kernel + lazily-fetched 9p root filesystem, passed straight to
       // v86, with no single boot image.
       emu.v86opts = r.v86opts;
@@ -1573,8 +2151,30 @@ class X86Item extends CollectionItem {
 }
 
 DosItem.register('emularity-item-dos');
+class NesItem extends CollectionItem {
+  static key = 'nes';
+  static label = 'NES';
+  static sublabel = 'libretro';
+  static sources = [new ArchiveOrgSource('emulator_ext:nes')];
+  static accept = '.nes,.fds,.unf,.unif';
+  static hint = 'A cartridge image (.nes), or a Famicom Disk System disk (.fds)';
+  static onscreenKeyboard = false; // a game pad: arrows, Z/X, Enter, Shift, or a gamepad
+  static cores = { mesen: 'Mesen (most accurate)', fceumm: 'FCEUmm (fastest)' };
+
+  async createEmulator() {
+    let r = this.record;
+    let emu = await this.newEmulator('emularity-libretro', '../emulators/libretro');
+    emu.setAttribute('core', r.core || 'mesen');
+    let blob = await this.media();
+    if (blob) { emu.romBlob = blob; emu.setAttribute('romname', r.filename); }
+    else emu.setAttribute('rom', r.url);
+    return emu;
+  }
+}
+
 Apple2eItem.register('emularity-item-apple2e');
 X86Item.register('emularity-item-x86');
+NesItem.register('emularity-item-nes');
 
 
 /* ===== Dialogs ===== */
@@ -1591,12 +2191,81 @@ class EditDialog extends HTMLElement {
         <label class="edit-exe-field">Program to run <input type="text" name="edit-exe" placeholder="GAMEDIR/GAME.EXE"></label>
         <label class="edit-url-field">URL <input type="url" name="edit-url"></label>
         <label>Thumbnail URL <input type="url" name="edit-thumb" placeholder="https://archive.org/services/img/..."></label>
+        <label class="edit-core-field">Emulator core <select name="edit-core"></select></label>
         <label class="edit-capture-field"><input type="checkbox" name="edit-capture"> Capture the mouse when the screen is clicked (Esc releases it)</label>
+        <label class="edit-network-field"><input type="checkbox" name="edit-network"> Connect to the local network (shared by every machine running in this browser)</label>
+        <label class="edit-network-field">Host name on the network <input type="text" name="edit-hostname"></label>
+        <fieldset class="edit-media-field">
+          <legend>Disks</legend>
+          <div class="disk-list"></div>
+          <div class="disk-add">
+            <button class="disk-add-file">＋ Add disk images or zips…</button>
+            <input type="file" class="disk-file" multiple hidden>
+            <button class="disk-add-folder">＋ Add a folder…</button>
+            <input type="file" class="disk-folder" webkitdirectory hidden>
+            <input type="url" name="disk-url" placeholder="…or a disk image or zip URL">
+            <button class="disk-add-url">Add</button>
+          </div>
+          <p class="field-hint">Floppies and CDs for this title. A zip or folder becomes a floppy or CD, whichever drive it's put in. "In drive" ones are inserted at power on; swap them from the 💿 menu while playing. Disk changes are saved right away.</p>
+          <p class="error-note disk-error"></p>
+        </fieldset>
         <button class="primary edit-save">Save changes</button>
       </dialog>`;
     this.dialog = this.querySelector('dialog');
     this.querySelector('.close-dialog').addEventListener('click', () => this.dialog.close());
     this.querySelector('.edit-save').addEventListener('click', () => this.save());
+    let fileInput = this.querySelector('.disk-file'), folderInput = this.querySelector('.disk-folder');
+    this.querySelector('.disk-add-file').addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', () => this.diskAction(async () => {
+      for (let disk of await CollectionItem.groupFiles(fileInput.files)) await this.item.addDisk(disk);
+      fileInput.value = '';
+    }));
+    this.querySelector('.disk-add-folder').addEventListener('click', () => folderInput.click());
+    folderInput.addEventListener('change', () => this.diskAction(async () => {
+      if (folderInput.files.length) await this.item.addDisk(CollectionItem.folderDisk(folderInput.files));
+      folderInput.value = '';
+    }));
+    this.querySelector('.disk-add-url').addEventListener('click', () => this.diskAction(async () => {
+      let url = this.field('disk-url').value.trim();
+      if (!url) return;
+      let name = decodeURIComponent(new URL(url, location.href).pathname.split('/').pop()) || url;
+      await this.item.addDisk({ name, url });
+      this.field('disk-url').value = '';
+    }));
+  }
+  /* Run a disk-list change, then show the list as it now is */
+  async diskAction(fn) {
+    this.querySelector('.disk-error').textContent = '';
+    try { await fn(); }
+    catch (e) { console.error(e); this.querySelector('.disk-error').textContent = e.message; }
+    this.renderDisks();
+  }
+  renderDisks() {
+    let item = this.item, drives = item.constructor.mediaDrives;
+    let list = this.querySelector('.disk-list');
+    if (!drives) { list.replaceChildren(); return; }
+    list.replaceChildren(...item.disks.map(disk => {
+      let row = document.createElement('div');
+      row.className = 'disk-row';
+      row.innerHTML = `
+        <input type="text" class="disk-name" title="Name">
+        <select class="disk-drive" title="Drive"></select>
+        <label class="disk-inserted" title="Inserted at power on"><input type="checkbox"> In drive</label>
+        <button class="disk-remove" title="Remove this disk">✕</button>`;
+      let name = row.querySelector('.disk-name');
+      name.value = disk.name;
+      name.addEventListener('change', () => this.diskAction(() => item.updateDisk(disk.id, { name: name.value.trim() || disk.name })));
+      let drive = row.querySelector('.disk-drive');
+      drive.replaceChildren(...Object.entries(drives).map(([id, d]) => new Option(d.label, id)));
+      drive.value = disk.drive;
+      drive.addEventListener('change', () => this.diskAction(() => item.updateDisk(disk.id, { drive: drive.value })));
+      let inserted = row.querySelector('.disk-inserted input');
+      inserted.checked = item.inserted[disk.drive] == disk.id;
+      inserted.addEventListener('change', () => this.diskAction(() => item.setInserted(disk.drive, inserted.checked ? disk.id : null)));
+      row.querySelector('.disk-remove').addEventListener('click', () => this.diskAction(() => item.removeDisk(disk.id)));
+      return row;
+    }));
+    if (!item.disks.length) list.innerHTML = '<p class="field-hint">No disks yet.</p>';
   }
   field(name) { return this.querySelector(`[name="${name}"]`); }
   open(item) {
@@ -1607,9 +2276,27 @@ class EditDialog extends HTMLElement {
     this.field('edit-url').value = r.url || '';
     this.field('edit-thumb').value = r.thumb || '';
     this.field('edit-capture').checked = !!r.captureMouse;
+    let cores = item.constructor.cores;
+    this.querySelector('.edit-core-field').style.display = cores ? '' : 'none';
+    if (cores) {
+      let select = this.field('edit-core');
+      select.replaceChildren(...Object.entries(cores).map(([id, label]) => new Option(label, id)));
+      select.value = r.core || Object.keys(cores)[0];
+    }
+    this.field('edit-network').checked = r.network == 'lan';
+    this.field('edit-hostname').value = r.hostname || '';
+    this.field('edit-hostname').placeholder = item.hostname;
     this.querySelector('.edit-exe-field').style.display = item.constructor.exeField ? '' : 'none';
     this.querySelector('.edit-capture-field').style.display = item.constructor.captureMouseField ? '' : 'none';
+    this.querySelectorAll('.edit-network-field').forEach(el => { el.style.display = item.constructor.networkField ? '' : 'none'; });
     this.querySelector('.edit-url-field').style.display = r.source == 'url' ? '' : 'none';
+    let drives = item.constructor.mediaDrives;
+    this.querySelector('.edit-media-field').style.display = drives ? '' : 'none';
+    if (drives) {
+      this.querySelector('.disk-file').accept = [...new Set(Object.values(item.constructor.mediaAccept).join(',').split(','))].join(',');
+      this.querySelector('.disk-error').textContent = '';
+      this.renderDisks();
+    }
     this.dialog.showModal();
   }
   save() {
@@ -1621,15 +2308,72 @@ class EditDialog extends HTMLElement {
     };
     if (r.source == 'url') fields.url = this.field('edit-url').value.trim() || r.url;
     if (this.item.constructor.captureMouseField) fields.captureMouse = this.field('edit-capture').checked || undefined;
+    if (this.item.constructor.cores) fields.core = this.field('edit-core').value;
+    if (this.item.constructor.networkField) {
+      fields.network = this.field('edit-network').checked ? 'lan' : undefined;
+      fields.hostname = this.field('edit-hostname').value.trim() || undefined;
+    }
     this.item.update(fields);
     this.dialog.close();
   }
 }
 customElements.define('emularity-edit-dialog', EditDialog);
 
-/* Add software to the collection: from an archive.org search, a URL, or an upload.
-   open(platform) shows it for a platform's item class; new items are added through
-   the `collection` it belongs to. */
+/* Make a new instance of a title: a fresh copy with its own saves (and for machines,
+   its own disk changes and network name), optionally with a bigger hard disk.
+   open(item) shows it; instances are made through the `collection` it belongs to. */
+class InstanceDialog extends HTMLElement {
+  collection = null;
+
+  connectedCallback() {
+    if (this.dialog) return;
+    this.innerHTML = `
+      <dialog class="instance-dialog">
+        <button class="close-dialog" title="Close">✕</button>
+        <h3>New instance</h3>
+        <p class="field-hint">A fresh copy of <b class="instance-of"></b> as it was originally, with its own saved changes.</p>
+        <label>Title <input type="text" name="instance-title"></label>
+        <label class="instance-disk-field">Hard disk size <select name="instance-disk"></select></label>
+        <p class="field-hint instance-disk-hint">A bigger disk is built by copying the original's files onto it, which reads the whole original once. Only the space that gets used is stored.</p>
+        <button class="primary instance-create">Create</button>
+      </dialog>`;
+    this.dialog = this.querySelector('dialog');
+    this.querySelector('.close-dialog').addEventListener('click', () => this.dialog.close());
+    this.querySelector('.instance-create').addEventListener('click', () => this.create());
+  }
+  async open(item) {
+    this.item = item;
+    this.querySelector('.instance-of').textContent = item.record.title;
+    let title = this.querySelector('[name="instance-title"]');
+    title.value = this.collection.instanceTitle(item);
+    let resizable = !!item.canResizeDisk;
+    for (let el of this.querySelectorAll('.instance-disk-field, .instance-disk-hint')) el.style.display = resizable ? '' : 'none';
+    if (resizable) {
+      let { maxDiskSize } = await import('../src/emulators/fat-repack.js');
+      let current = item.hardDiskSize, max = maxDiskSize();
+      let select = this.querySelector('[name="instance-disk"]');
+      let options = [new Option('Same as the original' + (current ? ' (' + Format.bytes(current) + ')' : ''), '')];
+      for (let mb of [512, 1024, 1536]) {
+        if (!current || mb * 1048576 > current * 1.1) options.push(new Option(Format.bytes(mb * 1048576), mb * 1048576));
+      }
+      options.push(new Option(Format.bytes(max) + ' (the most FAT16 allows)', max));
+      select.replaceChildren(...options);
+    }
+    this.dialog.showModal();
+    title.select();
+  }
+  create() {
+    let title = this.querySelector('[name="instance-title"]').value.trim();
+    let diskSize = this.item.canResizeDisk ? +this.querySelector('[name="instance-disk"]').value || 0 : 0;
+    this.dialog.close();
+    this.collection.newInstance(this.item, { title, diskSize });
+  }
+}
+customElements.define('emularity-instance-dialog', InstanceDialog);
+
+/* Add software to the collection: from one of the platform's sources (see
+   SoftwareSource), a URL, or an upload. open(platform) shows it for a platform's item
+   class; new items are added through the `collection` it belongs to. */
 class AddDialog extends HTMLElement {
   collection = null;
 
@@ -1640,7 +2384,7 @@ class AddDialog extends HTMLElement {
         <button class="close-dialog" title="Close">✕</button>
         <h3>Add software</h3>
         <div class="add-tabs">
-          <button data-tab="search" class="active">Search archive.org</button>
+          <span class="source-tabs"></span>
           <button data-tab="url">From URL</button>
           <button data-tab="upload">Upload</button>
         </div>
@@ -1650,7 +2394,7 @@ class AddDialog extends HTMLElement {
             <span class="search-filter" title="Results are filtered to software for this platform"></span>
             <input type="search" name="query" placeholder="Search titles...">
           </div>
-          <p class="field-hint">Results from archive.org's software library. Click one to add it to your collection.</p>
+          <p class="field-hint source-hint"></p>
           <div class="search-results"></div>
         </div>
 
@@ -1670,19 +2414,15 @@ class AddDialog extends HTMLElement {
           <button class="primary add-upload">Add to collection</button>
         </div>
         <p class="error-note"></p>
+        <p class="added-note" aria-live="polite"></p>
       </dialog>`;
     this.dialog = this.querySelector('dialog');
     this.results = this.querySelector('.search-results');
 
     this.querySelector('.close-dialog').addEventListener('click', () => this.dialog.close());
-    this.querySelectorAll('.add-tabs button').forEach(btn => {
-      btn.addEventListener('click', () => {
-        this.querySelectorAll('.add-tabs button').forEach(b => b.classList.toggle('active', b == btn));
-        this.querySelectorAll('.tab-panel').forEach(p => { p.style.display = (p.dataset.panel == btn.dataset.tab) ? '' : 'none'; });
-      });
-    });
+    this.querySelectorAll('.add-tabs > button').forEach(btn => btn.addEventListener('click', () => this.showTab(btn)));
     let query = this.field('query');
-    // Debounce as-you-type searches so we don't hit archive.org on every keystroke
+    // Debounce as-you-type searches so we don't hit the network on every keystroke
     query.addEventListener('input', () => {
       clearTimeout(this.searchTimer);
       this.searchTimer = setTimeout(() => this.search(), 500);
@@ -1695,58 +2435,82 @@ class AddDialog extends HTMLElement {
       let el = this.results;
       if (el.scrollTop + el.clientHeight >= el.scrollHeight - 150) this.loadMore();
     });
-    this.querySelector('.add-url').addEventListener('click', () => this.addFromURL());
-    this.querySelector('.add-upload').addEventListener('click', () => this.addFromUpload());
+    // Shift+click adds without closing, to add several titles in a row
+    this.querySelector('.add-url').addEventListener('click', ev => this.addFromURL(ev.shiftKey));
+    this.querySelector('.add-upload').addEventListener('click', ev => this.addFromUpload(ev.shiftKey));
   }
   field(name) { return this.querySelector(`[name="${name}"]`); }
   setError(msg) { this.querySelector('.error-note').textContent = msg || ''; }
 
   open(platform) {
     this.platform = platform;
-    this.field('query').value = '';
-    this.querySelector('.search-filter').textContent = platform.query;
-    this.results.innerHTML = '';
     this.setError('');
     this.querySelector('.url-hint').textContent = platform.hint;
     this.querySelector('.upload-hint').textContent = platform.hint;
     this.field('file').accept = platform.accept;
     this.querySelectorAll('.exe-field').forEach(el => { el.style.display = platform.exeField ? '' : 'none'; });
+    // One tab per source, all sharing the search panel
+    let tabs = this.querySelector('.source-tabs');
+    tabs.replaceChildren(...platform.sources.map(source => {
+      let btn = document.createElement('button');
+      btn.dataset.tab = 'search';
+      btn.textContent = source.label;
+      btn.source = source;
+      btn.addEventListener('click', () => this.showTab(btn));
+      return btn;
+    }));
     this.dialog.showModal();
+    this.showTab(tabs.firstElementChild || this.querySelector('[data-tab="url"]'));
+  }
+  showTab(btn) {
+    this.querySelectorAll('.add-tabs button').forEach(b => b.classList.toggle('active', b == btn));
+    this.querySelectorAll('.tab-panel').forEach(p => { p.style.display = (p.dataset.panel == btn.dataset.tab) ? '' : 'none'; });
+    if (btn.source) this.useSource(btn.source);
+  }
+  useSource(source) {
+    this.source = source;
+    this.querySelector('.added-note').textContent = '';
+    let filter = this.querySelector('.search-filter');
+    filter.textContent = source.filter;
+    filter.style.display = source.filter ? '' : 'none';
+    this.querySelector('.source-hint').textContent = source.hint + ' Shift+click to add several.';
+    this.field('query').value = '';
+    this.results.innerHTML = '';
     this.field('query').focus();
-    this.search(); // pre-populate with this platform's most popular software
+    this.search(); // pre-populate with what the source has
   }
 
-  /* ----- archive.org search ----- */
+  /* ----- Searching the current source ----- */
 
-  appendResults(docs) {
-    docs.forEach(doc => {
+  appendResults(found) {
+    found.forEach(result => {
       let row = document.createElement('div');
       row.className = 'search-result';
       row.innerHTML = '<img loading="lazy"><div><div class="result-title"></div><div class="result-detail"></div></div>';
-      row.querySelector('img').src = ArchiveOrg.thumbUrl(doc.identifier);
-      row.querySelector('.result-title').textContent = Array.isArray(doc.title) ? doc.title[0] : (doc.title || doc.identifier);
-      row.querySelector('.result-detail').textContent = doc.identifier + (doc.year ? ' · ' + doc.year : '');
-      row.addEventListener('click', () => this.addFromArchive(doc, row));
+      let img = row.querySelector('img');
+      if (result.thumb) img.src = result.thumb; else img.remove();
+      row.querySelector('.result-title').textContent = result.title;
+      row.querySelector('.result-detail').textContent = result.detail || '';
+      row.addEventListener('click', ev => this.addFromSource(result, row, ev.shiftKey));
       this.results.appendChild(row);
     });
   }
   async search() {
-    let results = this.results;
+    let results = this.results, source = this.source;
     let text = this.field('query').value.trim();
-    let query = this.platform.query + (text ? ' ' + text : '');
-    let state = this.searchState = { query, page: 1, total: Infinity, loading: true };
+    let state = this.searchState = { source, text, page: 1, total: Infinity, loading: true };
     if (!results.children.length) results.innerHTML = '<p class="field-hint">Searching...</p>';
     results.classList.add('loading');
     this.setError('');
     try {
-      let { docs, total } = await ArchiveOrg.search(query, 1);
+      let { results: found, total } = await source.search(text, 1);
       if (state != this.searchState) return; // a newer search superseded this one
       results.classList.remove('loading');
       results.innerHTML = '';
       state.total = total;
       state.loading = false;
-      if (!docs.length) { results.innerHTML = '<p class="field-hint">No results.</p>'; return; }
-      this.appendResults(docs);
+      if (!found.length) { results.innerHTML = '<p class="field-hint">No results.</p>'; return; }
+      this.appendResults(found);
       results.scrollTop = 0;
     } catch (e) {
       if (state != this.searchState) return;
@@ -1766,10 +2530,10 @@ class AddDialog extends HTMLElement {
     loader.textContent = 'Loading more...';
     this.results.appendChild(loader);
     try {
-      let { docs } = await ArchiveOrg.search(state.query, state.page + 1);
+      let { results: found } = await state.source.search(state.text, state.page + 1);
       if (state != this.searchState) return; // superseded by a newer search
       state.page++;
-      this.appendResults(docs);
+      this.appendResults(found);
     } catch (e) {
       console.error(e);
     } finally {
@@ -1783,32 +2547,27 @@ class AddDialog extends HTMLElement {
   add(record) {
     return this.collection.addItem(Object.assign({ platform: this.platform.key }, record));
   }
-  async addFromArchive(doc, row) {
-    let identifier = doc.identifier;
+  /* After adding: close, or with `keepOpen` (shift+click) stay open for more */
+  added(title, keepOpen) {
+    if (!keepOpen) return this.dialog.close();
+    this.setError('');
+    this.querySelector('.added-note').textContent = 'Added "' + title + '".';
+  }
+  async addFromSource(result, row, keepOpen) {
     this.setError('');
     row.style.opacity = .5;
     try {
-      let resolved = await ArchiveOrg.resolveItem(identifier);
-      this.add({
-        title: resolved.title,
-        source: 'url',
-        url: resolved.url,
-        filename: resolved.filename,
-        exe: resolved.exe,
-        identifier: identifier,
-        thumb: ArchiveOrg.thumbUrl(identifier),
-        rating: doc.avg_rating != null ? +doc.avg_rating : 0,
-        size: resolved.size,
-      });
-      this.dialog.close();
+      this.add(await this.source.toRecord(result));
+      if (keepOpen) row.classList.add('added');
+      this.added(result.title, keepOpen);
     } catch (e) {
       console.error(e);
-      this.setError(`Couldn't add ${identifier}: ${e.message}`);
+      this.setError(`Couldn't add ${result.title}: ${e.message}`);
     } finally {
       row.style.opacity = '';
     }
   }
-  addFromURL() {
+  addFromURL(keepOpen) {
     let url = this.field('url').value.trim();
     if (!url) return this.setError('A URL is required.');
     let filename = url.split('?')[0].split('/').pop() || 'software';
@@ -1820,9 +2579,10 @@ class AddDialog extends HTMLElement {
       exe: this.field('exe').value.trim(),
     });
     item.fetchSize(); // fill in size via HEAD in the background
-    this.dialog.close();
+    for (let name of ['url', 'title', 'exe']) this.field(name).value = '';
+    this.added(item.record.title, keepOpen);
   }
-  async addFromUpload() {
+  async addFromUpload(keepOpen) {
     let input = this.field('file');
     if (!input.files.length) return this.setError('Choose a file to upload.');
     let file = input.files[0];
@@ -1835,7 +2595,8 @@ class AddDialog extends HTMLElement {
     });
     try {
       await LocalStore.uploadPut(item.record.id, file);
-      this.dialog.close();
+      for (let name of ['file', 'uploadtitle', 'uploadexe']) this.field(name).value = '';
+      this.added(item.record.title, keepOpen);
     } catch (e) {
       console.error(e);
       this.collection.dropItem(item);
@@ -1860,7 +2621,15 @@ class CollectionPlayer extends HTMLElement {
   async load(item) {
     this.item = item;
     this.emu = await item.buildEmulator();
-    this.emu.addEventListener('exit', () => this.showPoweredOff());
+    this.emu.addEventListener('exit', ev => this.showPoweredOff(ev.detail || {}));
+    // Closing the tab (or window, or a stray Ctrl+W, which pages can't intercept) while
+    // a machine runs asks first. Our own navigations set `leaving` to skip it.
+    this.leaving = false;
+    addEventListener('beforeunload', ev => {
+      if (this.leaving || this.poweredOff) return;
+      ev.preventDefault();
+      ev.returnValue = ''; // older browsers need this to show the prompt
+    });
 
     let bar = document.createElement('div');
     bar.className = 'player-bar';
@@ -1869,14 +2638,25 @@ class CollectionPlayer extends HTMLElement {
       <span class="player-title"></span>
       <span class="pb-timer" title="Time played this session">0:00</span>
       <span class="pb-controls">
+        <span class="pb-media-wrap">
+          <button class="pb-media" title="Disks: insert, swap or eject">💿</button>
+          <div class="pb-media-popup" hidden></div>
+          <input type="file" class="pb-media-file" multiple hidden>
+          <input type="file" class="pb-media-folder" webkitdirectory hidden>
+        </span>
+        <button class="pb-network" title="Show the machines on the local network">🖧</button>
         <button class="pb-capture" title="Capture mouse (Esc releases it)">🖱</button>
         <button class="pb-mute"></button>
         <button class="pb-theater" title="Theater mode">▭</button>
         <button class="pb-fullscreen" title="Fullscreen">⛶</button>
       </span>`;
     bar.querySelector('.player-title').textContent = item.record.title;
-    // Navigates history (same as the browser Back button), back to the library route
-    bar.querySelector('.pb-back').addEventListener('click', () => history.back());
+    // To the platform's library (replacing this entry, so Back still behaves); leaving
+    // on purpose, so no "leave site?" prompt
+    bar.querySelector('.pb-back').addEventListener('click', () => {
+      this.leaving = true;
+      location.replace('#' + item.record.platform);
+    });
 
     // Count up play time for this session (it ends with the reload that leaving the
     // player triggers).
@@ -1908,12 +2688,15 @@ class CollectionPlayer extends HTMLElement {
     });
 
     // Pointer lock, for emulators that support it: raw relative mouse movement
+    bar.querySelector('.pb-network').addEventListener('click', () => this.dispatchEvent(new CustomEvent('shownetwork', { bubbles: true })));
     let captureBtn = bar.querySelector('.pb-capture');
     if (typeof this.emu.lockPointer == 'function') {
       captureBtn.addEventListener('click', () => this.emu.lockPointer().catch(e => console.warn('Emularity: pointer lock failed', e)));
     } else {
       captureBtn.remove();
     }
+
+    this.setUpMediaMenu(bar);
 
     bar.querySelector('.pb-fullscreen').addEventListener('click', () => {
       let c = this.emu.canvas;
@@ -1924,10 +2707,157 @@ class CollectionPlayer extends HTMLElement {
     this.replaceChildren(bar, this.emu);
   }
 
-  showPoweredOff() {
+  /* The 💿 menu: each removable drive, what's in it, and the title's disks that fit */
+  setUpMediaMenu(bar) {
+    let item = this.item, emu = this.emu;
+    let wrap = bar.querySelector('.pb-media-wrap');
+    if (!item.constructor.mediaDrives || !('mediaDrives' in emu)) { wrap.remove(); return; }
+    let button = wrap.querySelector('.pb-media'), popup = wrap.querySelector('.pb-media-popup');
+    let fileInput = wrap.querySelector('.pb-media-file'), folderInput = wrap.querySelector('.pb-media-folder');
+    let note = '', fileDrive = null;
+
+    // Keep the title's record in step with the drives, so the same disks are in next
+    // time. Disks the title doesn't own (its main image, the machine's own) aren't kept.
+    emu.addEventListener('mediachange', ev => {
+      let { drive, current } = ev.detail;
+      let id = current && item.disks.some(d => d.id == current.id) ? current.id : null;
+      if (id || item.inserted[drive]) item.setInserted(drive, id);
+      if (!popup.hidden) render();
+    });
+
+    let run = async (label, fn) => {
+      note = label + '…';
+      render();
+      try { await fn(); note = ''; }
+      catch (e) {
+        console.error(e);
+        note = e.message;
+      }
+      render();
+    };
+    let insert = (drive, disk) => run('Inserting ' + disk.name, async () => {
+      // A disk can only be in one drive at a time: take it out of the other
+      let elsewhere = emu.mediaDrives.find(d => d.id != drive.id && d.current && d.current.id == disk.id && d.canEject !== false);
+      if (elsewhere) await emu.ejectMedia(elsewhere.id);
+      try {
+        await emu.insertMedia(drive.id, await item.diskMedia(disk, drive.id));
+      } catch (e) {
+        if (!e.needsRestart) throw e;
+        // Takes effect at the next power on
+        if (disk.drive != drive.id) item.updateDisk(disk.id, { drive: drive.id });
+        item.setInserted(drive.id, disk.id);
+        throw e;
+      }
+    });
+    // (Several files can be picked, for a cue sheet and its .bin: the first disk they
+    // make goes in the drive, and the rest are kept with the title's disks)
+    fileInput.addEventListener('change', () => {
+      let picked = [...fileInput.files], drive = fileDrive;
+      fileInput.value = '';
+      if (!picked.length || !drive) return;
+      run('Adding ' + picked[0].name, async () => {
+        let disks = await CollectionItem.groupFiles(picked), first;
+        for (let d of disks) {
+          let disk = await item.addDisk({ ...d, drive: drive.id });
+          first ||= disk;
+        }
+        render();
+        await insert(drive, first);
+      });
+    });
+
+    folderInput.addEventListener('change', () => {
+      let drive = fileDrive;
+      if (!folderInput.files.length || !drive) return;
+      let folder = CollectionItem.folderDisk(folderInput.files);
+      folderInput.value = '';
+      run('Adding ' + folder.name, async () => {
+        let disk = await item.addDisk({ ...folder, drive: drive.id });
+        render();
+        await insert(drive, disk);
+      });
+    });
+
+    let render = () => {
+      let rows = [];
+      for (let drive of emu.mediaDrives) {
+        let section = document.createElement('div');
+        section.className = 'pbm-drive';
+        let head = document.createElement('div');
+        head.className = 'pbm-head';
+        head.innerHTML = `<b></b> <span></span>`;
+        head.querySelector('b').textContent = drive.label;
+        head.querySelector('span').textContent = drive.current ? drive.current.name : 'empty';
+        section.append(head);
+        let fits = item.disks.filter(d => item.diskFits(d, drive.id));
+        for (let disk of fits) {
+          let current = drive.current && drive.current.id == disk.id;
+          let b = document.createElement('button');
+          b.textContent = (current ? '● ' : '○ ') + disk.name;
+          b.disabled = current;
+          let elsewhere = emu.mediaDrives.find(d => d.id != drive.id && d.current && d.current.id == disk.id);
+          if (elsewhere && !drive.disks) { b.textContent += ` (move from ${elsewhere.label})`; b.classList.add('pbm-later'); }
+          // DOSBox can only swap among disks mounted at power on
+          if (drive.disks && !drive.disks.includes(disk.id)) { b.textContent += ' (after restart)'; b.classList.add('pbm-later'); }
+          b.addEventListener('click', () => insert(drive, disk));
+          section.append(b);
+        }
+        if (drive.current && drive.canEject !== false) {
+          let b = document.createElement('button');
+          b.textContent = '⏏ Eject';
+          b.addEventListener('click', () => run('Ejecting', () => emu.ejectMedia(drive.id)));
+          section.append(b);
+        }
+        let add = document.createElement('button');
+        add.textContent = '＋ Insert a file…';
+        add.addEventListener('click', () => {
+          fileDrive = drive;
+          fileInput.accept = item.constructor.mediaAccept[drive.kind] || '';
+          fileInput.click();
+        });
+        let addFolder = document.createElement('button');
+        addFolder.textContent = '＋ Insert a folder…';
+        addFolder.addEventListener('click', () => {
+          fileDrive = drive;
+          folderInput.click();
+        });
+        section.append(add, addFolder);
+        rows.push(section);
+      }
+      // DOSBox swaps every multi-disk drive at once
+      let together = emu.mediaDrives.filter(d => d.disks && d.disks.length > 1);
+      if (together.length > 1) {
+        let p = document.createElement('p');
+        p.className = 'pbm-hint';
+        p.textContent = `Changing disks also changes ${together.map(d => d.label).join(' and ')} together — DOSBox swaps every drive at once.`;
+        rows.push(p);
+      }
+      if (note) {
+        let p = document.createElement('p');
+        p.className = 'pbm-note';
+        p.textContent = note;
+        rows.push(p);
+      }
+      popup.replaceChildren(...rows);
+    };
+    button.addEventListener('click', ev => {
+      ev.stopPropagation();
+      popup.hidden = !popup.hidden;
+      button.classList.toggle('active', !popup.hidden);
+      if (!popup.hidden) { note = ''; render(); }
+    });
+    popup.addEventListener('click', ev => ev.stopPropagation());
+    document.addEventListener('click', () => { popup.hidden = true; button.classList.remove('active'); });
+  }
+
+  /* `how` is the emulator's exit detail: { shutdown } when an operating system shut the
+     machine down */
+  showPoweredOff(how = {}) {
     if (this.poweredOff) return;
     this.poweredOff = true;
     clearInterval(this.timer);
+    // Give the mouse and keyboard back (leaving fullscreen releases the keyboard lock)
+    if (document.pointerLockElement) { try { document.exitPointerLock(); } catch (e) {} }
     if (document.fullscreenElement) { try { document.exitFullscreen(); } catch (e) {} }
     let overlay = document.createElement('div');
     overlay.className = 'powered-off';
@@ -1937,8 +2867,10 @@ class CollectionPlayer extends HTMLElement {
       <button class="po-power" title="Power on">⏻</button>
       <span class="po-label">Power on</span>`;
     overlay.querySelector('.po-title').textContent = this.item.record.title;
+    if (how.shutdown) overlay.querySelector('.po-sub').textContent = 'The machine has shut down.';
     let powerOn = async () => {
       await this.item.beforeLaunch(); // e.g. re-grant folder access within this gesture
+      this.leaving = true;
       location.reload();
     };
     overlay.querySelector('.po-power').addEventListener('click', powerOn);
@@ -1989,14 +2921,11 @@ class EmularityCollection extends HTMLElement {
       X86Item.starterRecords().forEach(r => this.adopt(CollectionItem.fromRecord(r)));
       this.x86Seeded = changed = true;
     }
-    if (/[?&]addarch\b/.test(location.search) && !this.items.some(i => i.record.id == 'arch-linux')) {
-      this.adopt(CollectionItem.fromRecord(X86Item.archRecord()));
-      changed = true;
-    }
     if (changed) this.save();
 
     // Close any open card menu when clicking elsewhere
     document.addEventListener('click', () => this.closeMenus());
+    this.addEventListener('shownetwork', () => this.showNetwork());
     window.addEventListener('hashchange', () => this.renderRoute());
     if (!location.hash) history.replaceState(null, '', '#' + this.platform);
     this.renderRoute();
@@ -2009,6 +2938,7 @@ class EmularityCollection extends HTMLElement {
   adopt(item) {
     item.addEventListener('itemchange', () => { this.save(); this.renderGrid(); });
     item.addEventListener('itemedit', () => this.editDialog.open(item));
+    item.addEventListener('iteminstance', () => this.instanceDialog.open(item));
     item.addEventListener('itemremove', () => this.dropItem(item));
     item.addEventListener('menuopen', () => this.closeMenus());
     this.items.push(item);
@@ -2022,8 +2952,62 @@ class EmularityCollection extends HTMLElement {
     this.renderGrid();
     return item;
   }
+  /* Another instance of an item: the same software, its own id, so its own saves (and
+     for machines, its own disk changes and network name). Numbered after its title. */
+  /* The next free numbered title for an instance of an item */
+  instanceTitle(item) {
+    let base = item.record.title.replace(/ \d+$/, '');
+    let taken = new Set(this.items.map(i => i.record.title));
+    let n = 2;
+    while (taken.has(base + ' ' + n)) n++;
+    return base + ' ' + n;
+  }
+  /* Options: title, and diskSize to give it a bigger hard disk (see X86Item) */
+  async newInstance(item, { title, diskSize } = {}) {
+    let disk = null;
+    if (diskSize) {
+      // Can take a while (the whole disk is read): progress shows on the original's card
+      try { disk = await item.buildDisk(diskSize, item.progress('Building a ' + Format.bytes(diskSize) + ' disk')); }
+      catch (e) {
+        console.error(e);
+        alert('Failed to build the new hard disk: ' + e.message);
+        item.render();
+        return null;
+      }
+      item.render();
+    }
+    let record = structuredClone(item.record);
+    for (let key of ['id', 'added', 'lastPlayed', 'cached', 'cloned', 'diskName', 'installed', 'installDir', 'hostname']) delete record[key];
+    record.title = title || this.instanceTitle(item);
+    if (disk) record.disk = disk;
+    // Uploaded disks are stored by id: give the copy its own
+    let copies = [], inserted = { ...(record.inserted || {}) };
+    for (let disk of record.media || []) {
+      if (!disk.upload) continue;
+      let id = 'disk-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7);
+      for (let d in inserted) if (inserted[d] == disk.id) inserted[d] = id;
+      copies.push([disk.id, id]);
+      disk.id = id;
+    }
+    record.inserted = inserted;
+    for (let [from, to] of copies) {
+      try { await LocalStore.uploadPut(to, await LocalStore.uploadGet(from)); } catch (e) { console.error(e); }
+    }
+    let copy = this.addItem(record);
+    if (record.source == 'upload') {
+      // Uploads are stored per item
+      try { await LocalStore.uploadPut(copy.record.id, await LocalStore.uploadGet(item.record.id)); }
+      catch (e) { console.error(e); alert('Failed to copy the uploaded file: ' + e.message); }
+    }
+    return copy;
+  }
   dropItem(item) {
     this.items = this.items.filter(i => i != item);
+    // A built hard disk goes with the last instance using it
+    let disk = item.record.disk;
+    if (disk && !this.items.some(i => i.record.disk && i.record.disk.template == disk.template)) {
+      LocalStore.uploadDelete(disk.template).catch(e => console.error(e));
+    }
     item.remove();
     this.save();
     this.renderGrid();
@@ -2074,7 +3058,11 @@ class EmularityCollection extends HTMLElement {
     }
     // Leaving a running emulator requires a reload (emscripten runtimes don't tear down
     // cleanly); the hash is already updated, so the library renders after the reload.
-    if (this.playing) { location.reload(); return; }
+    if (this.playing) {
+      if (this.player) this.player.leaving = true; // not a stray close: no prompt
+      location.reload();
+      return;
+    }
     if (CollectionItem.platforms[head]) this.platform = head;
     if (!this.querySelector('.platform-tabs')) this.render();
     this.renderTabs();
@@ -2084,6 +3072,7 @@ class EmularityCollection extends HTMLElement {
   render() {
     this.innerHTML = `
       <header>
+        <button class="network-button" title="Show the machines on the local network">🖧 Network</button>
         <img src="../logos/emularity-transparent.png" alt="Emularity">
         <p>Your personal software collection. Pick a platform, add software, click to play.</p>
       </header>
@@ -2092,9 +3081,13 @@ class EmularityCollection extends HTMLElement {
       <div class="game-grid"></div>
       <p class="empty-note" style="display: none">No software installed for this platform yet. Click "Add software" to get started.</p>
       <emularity-add-dialog></emularity-add-dialog>
-      <emularity-edit-dialog></emularity-edit-dialog>`;
+      <emularity-edit-dialog></emularity-edit-dialog>
+      <emularity-instance-dialog></emularity-instance-dialog>`;
+    this.instanceDialog = this.querySelector('emularity-instance-dialog');
+    this.instanceDialog.collection = this;
     this.addDialog = this.querySelector('emularity-add-dialog');
     this.addDialog.collection = this;
+    this.querySelector('.network-button').addEventListener('click', () => this.showNetwork());
     this.editDialog = this.querySelector('emularity-edit-dialog');
 
     let sel = this.querySelector('.sort-select');
@@ -2137,13 +3130,31 @@ class EmularityCollection extends HTMLElement {
     this.querySelector('.sort-bar').style.display = items.length ? '' : 'none';
   }
 
+  /* The virtual LAN's machines, live, in a dialog. The panel only watches the LAN
+     while it's showing. */
+  showNetwork() {
+    let dialog = document.createElement('dialog');
+    dialog.className = 'network-dialog';
+    dialog.innerHTML = `
+      <button class="close-dialog" title="Close">✕</button>
+      <h3>Local network</h3>
+      <p class="field-hint">Machines running in this browser with networking enabled, in any tab. They can reach each other by name, e.g. <code>ping name.lan</code>.</p>
+      <emularity-lan-panel></emularity-lan-panel>`;
+    let uplink = this.getAttribute('uplink');
+    if (uplink) dialog.querySelector('emularity-lan-panel').setAttribute('uplink', uplink);
+    dialog.querySelector('.close-dialog').addEventListener('click', () => dialog.close());
+    dialog.addEventListener('close', () => dialog.remove());
+    this.appendChild(dialog);
+    dialog.showModal();
+  }
+
   /* ----- Playing ----- */
 
   async play(item) {
     this.playing = true;
     this.platform = item.record.platform;
     item.update({ lastPlayed: Date.now() });
-    let player = document.createElement('emularity-collection-player');
+    let player = this.player = document.createElement('emularity-collection-player');
     player.prefs = this.prefs;
     player.addEventListener('prefschange', () => this.save());
     try {

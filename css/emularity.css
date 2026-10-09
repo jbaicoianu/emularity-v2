@@ -47,11 +47,19 @@ emularity-file {
    like the other emulators. */
 .emularity-emulator .v86-screen {
   width: 100%;
-  max-width: 960px;
   margin: 0 auto;
   background: #000;
   order: 1;
   overflow: auto;
+}
+/* v86 upscales small video modes (<= 640 wide) by writing an inline pixel width/height
+   onto the canvas, which fights our sizing (e.g. in theater mode a 640x480 boot screen
+   would sit at a fixed, too-wide size until the guest switched to a bigger mode). Our
+   rules decide the displayed size, so they win over its inline styles. */
+.emularity-emulator .v86-screen canvas:not(:fullscreen) {
+  width: 100% !important;
+  height: auto !important;
+  transform: none !important;
 }
 .emularity-emulator .v86-screen canvas {
   display: block;
@@ -62,7 +70,6 @@ emularity-file {
 }
 .emularity-emulator .v86-screen:fullscreen,
 .emularity-emulator .v86-screen:-webkit-full-screen {
-  max-width: none;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -193,3 +200,384 @@ emularity-keyboard[layout="numpad"] .keyboard-key.Numpad0 {
     width: 160px;
   }
 }
+
+/* <emularity-lan-panel>: the virtual LAN's map and host table */
+.emularity-lan-panel {
+  display: block;
+  color: #ddd;
+  font-size: .9em;
+}
+.emularity-lan-panel .lan-map {
+  display: block;
+  width: 100%;
+  max-height: 420px;
+  overflow: visible; /* long names can run past the edge boxes */
+}
+.emularity-lan-panel .lan-link {
+  stroke: #3a6f7a;
+  stroke-width: 1.5;
+}
+.emularity-lan-panel .lan-node rect {
+  fill: #18242a;
+  stroke: #5ab8c8;
+}
+.emularity-lan-panel .lan-node.lan-gateway rect {
+  fill: #20343b;
+}
+.emularity-lan-panel .lan-node.lan-pending rect {
+  stroke-dasharray: 4 3;
+  stroke: #777;
+}
+.emularity-lan-panel .lan-node text {
+  fill: #ddd;
+  font: 11px sans-serif;
+  text-anchor: middle;
+}
+.emularity-lan-panel .lan-node .lan-ip {
+  fill: #8ab;
+  font-family: monospace;
+}
+.emularity-lan-panel table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: .75em;
+}
+.emularity-lan-panel table {
+  display: block;
+  overflow-x: auto; /* many columns: scroll sideways rather than crush them */
+}
+.emularity-lan-panel th,
+.emularity-lan-panel td {
+  text-align: left;
+  padding: .3em .6em;
+  border-bottom: 1px solid #2a2a2a;
+  font-size: .9em;
+}
+.emularity-lan-panel th {
+  white-space: nowrap;
+}
+.emularity-lan-panel td:nth-child(n+2):not(:nth-child(4)) {
+  white-space: nowrap; /* addresses and times stay on one line */
+}
+.emularity-lan-panel th {
+  color: #999;
+  font-weight: normal;
+}
+.emularity-lan-panel td:nth-child(2),
+.emularity-lan-panel td:nth-child(3) {
+  font-family: monospace;
+}
+.emularity-lan-panel tr.lan-pending td,
+.emularity-lan-panel tr.lan-gateway td {
+  color: #888;
+}
+.emularity-lan-panel .lan-empty {
+  color: #888;
+  text-align: center;
+}
+.emularity-lan-panel .lan-cloud {
+  cursor: pointer;
+}
+.emularity-lan-panel .lan-cloud path {
+  fill: #1c2630;
+  stroke: #8aa;
+  stroke-width: 1.5;
+}
+.emularity-lan-panel .lan-cloud:hover path,
+.emularity-lan-panel .lan-cloud:focus path {
+  stroke: #fff;
+}
+.emularity-lan-panel .lan-cloud.lan-uplink-online path {
+  fill: #183040;
+  stroke: #5ab8c8;
+}
+.emularity-lan-panel .lan-cloud text {
+  fill: #ddd;
+  font: 11px sans-serif;
+  text-anchor: middle;
+}
+.emularity-lan-panel .lan-cloud .lan-ip {
+  fill: #8ab;
+}
+.emularity-lan-panel .lan-uplink-flow .lan-link {
+  stroke-dasharray: 4 4;
+  stroke: #444;
+}
+.emularity-lan-panel .lan-uplink-flow.lan-uplink-online .lan-link {
+  stroke-dasharray: none;
+  stroke: #3a6f7a;
+}
+.emularity-lan-panel .lan-uplink-flow.lan-uplink-connecting .lan-link,
+.emularity-lan-panel .lan-uplink-flow.lan-uplink-authenticating .lan-link,
+.emularity-lan-panel .lan-uplink-flow.lan-uplink-configuring .lan-link {
+  stroke: #5ab8c8;
+  animation: lan-link-dash 0.6s linear infinite;
+}
+/* Traffic: a band per direction, as wide as the throughput, its dashes moving the way
+   the data goes */
+.emularity-lan-panel .lan-band {
+  stroke-linecap: butt;
+  stroke-dasharray: 6 3;
+  animation: lan-band-flow 0.6s linear infinite;
+  opacity: .85;
+}
+.emularity-lan-panel .lan-band-in {
+  stroke: #5ab8c8;
+}
+.emularity-lan-panel .lan-band-out {
+  stroke: #e8a54b;
+}
+@keyframes lan-band-flow {
+  to { stroke-dashoffset: -9; }
+}
+.emularity-lan-panel .lan-rate {
+  fill: #ddd;
+  font: 10px monospace;
+  paint-order: stroke;
+  stroke: #111;
+  stroke-width: 3px;
+}
+.emularity-lan-panel .lan-legend text {
+  fill: #888;
+  font: 10px sans-serif;
+}
+.emularity-lan-panel .lan-legend .lan-band {
+  animation: none;
+}
+@keyframes lan-link-dash {
+  to { stroke-dashoffset: -8; }
+}
+.emularity-lan-panel .lan-uplink-form {
+  border: 1px solid #333;
+  border-radius: 6px;
+  padding: .5em 1em 1em;
+  margin: .5em 0;
+}
+.emularity-lan-panel .lan-uplink-form h4 {
+  margin: .4em 0 .6em;
+}
+.emularity-lan-panel .lan-uplink-form h4 small {
+  color: #888;
+  font-weight: normal;
+}
+.emularity-lan-panel .lan-uplink-form label {
+  display: block;
+  margin: .5em 0;
+  color: #aaa;
+}
+.emularity-lan-panel .lan-uplink-form input {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: .25em;
+  padding: .4em .5em;
+  background: #000;
+  color: #ddd;
+  border: 1px solid #444;
+  border-radius: 4px;
+}
+.emularity-lan-panel .lan-uplink-status {
+  color: #8ab;
+  font-family: monospace;
+  font-size: .95em;
+}
+.emularity-lan-panel .lan-uplink-buttons button {
+  background: #1a3a44;
+  color: #ddd;
+  border: 1px solid #5ab8c8;
+  border-radius: 4px;
+  padding: .4em 1em;
+  cursor: pointer;
+}
+.emularity-lan-panel .lan-uplink-buttons button:disabled {
+  opacity: .4;
+  cursor: default;
+}
+.emularity-lan-panel .lan-actions {
+  text-align: right;
+  margin-top: .75em;
+}
+.emularity-lan-panel .lan-actions button {
+  background: none;
+  color: #999;
+  border: 1px solid #444;
+  border-radius: 4px;
+  padding: .3em .8em;
+  cursor: pointer;
+}
+.emularity-lan-panel .lan-actions button:hover {
+  color: #ddd;
+  border-color: #888;
+}
+/* The bandwidth graph (lan-graph.js) */
+.emularity-lan-panel .lan-graph {
+  margin: 1em 0;
+}
+.emularity-lan-panel .lan-graph-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1em;
+  flex-wrap: wrap;
+}
+.emularity-lan-panel .lan-graph-head h4 {
+  margin: 0;
+}
+.emularity-lan-panel .lan-graph-ranges button {
+  background: none;
+  color: #898781;
+  border: 1px solid #333;
+  border-radius: 4px;
+  padding: .2em .6em;
+  margin-left: .25em;
+  cursor: pointer;
+}
+.emularity-lan-panel .lan-graph-ranges button[aria-pressed="true"] {
+  color: #fff;
+  border-color: #c3c2b7;
+}
+.emularity-lan-panel .lan-graph-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: .5em;
+  margin: .75em 0;
+}
+.emularity-lan-panel .lan-graph-tile {
+  border: 1px solid rgba(255, 255, 255, .1);
+  border-radius: 6px;
+  padding: .5em .7em;
+}
+.emularity-lan-panel .lan-graph-tile-label {
+  color: #898781;
+  font-size: .85em;
+}
+.emularity-lan-panel .lan-graph-tile-value {
+  color: #fff;
+  font-weight: 600;
+  font-size: 1.15em;
+  margin: .1em 0;
+}
+.emularity-lan-panel .lan-graph-tile-detail {
+  color: #c3c2b7;
+  font-size: .85em;
+}
+.emularity-lan-panel .lan-graph-plot {
+  position: relative;
+}
+.emularity-lan-panel .lan-graph-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  touch-action: none;
+}
+.emularity-lan-panel .lan-graph-grid {
+  stroke: #2c2c2a;
+  stroke-width: 1;
+}
+.emularity-lan-panel .lan-graph-baseline {
+  stroke: #383835;
+  stroke-width: 1;
+}
+.emularity-lan-panel .lan-graph-axis {
+  fill: #898781;
+  font: 10px system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+.emularity-lan-panel .lan-graph-region {
+  fill: #898781;
+  font: 10px system-ui, sans-serif;
+}
+.emularity-lan-panel .lan-graph-area {
+  stroke: #111;     /* the surface gap between stacked machines */
+  stroke-width: 1;
+  stroke-linejoin: round;
+  opacity: .9;
+}
+.emularity-lan-panel .lan-graph-internet {
+  fill: none;
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.emularity-lan-panel .lan-graph-crosshair {
+  stroke: #c3c2b7;
+  stroke-width: 1;
+  pointer-events: none;
+}
+.emularity-lan-panel .lan-graph-tip {
+  position: absolute;
+  top: 8px;
+  min-width: 220px;
+  background: #1a1a19;
+  border: 1px solid rgba(255, 255, 255, .1);
+  border-radius: 6px;
+  padding: .5em .7em;
+  font-size: .85em;
+  pointer-events: none;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, .5);
+}
+.emularity-lan-panel .lan-graph-tip-head {
+  color: #898781;
+  margin-bottom: .3em;
+}
+.emularity-lan-panel .lan-graph-tip-row {
+  display: flex;
+  align-items: center;
+  gap: .5em;
+  color: #c3c2b7;
+  line-height: 1.6;
+}
+.emularity-lan-panel .lan-graph-tip-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.emularity-lan-panel .lan-graph-tip-values {
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+  white-space: pre;
+}
+.emularity-lan-panel .lan-graph-tip-total {
+  border-top: 1px solid #2c2c2a;
+  margin-top: .2em;
+}
+.emularity-lan-panel .lan-graph-key {
+  display: inline-block;
+  width: 12px;
+  height: 3px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+.emularity-lan-panel .lan-graph-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .25em .9em;
+  margin-top: .5em;
+}
+.emularity-lan-panel .lan-graph-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: .4em;
+  background: none;
+  border: none;
+  color: #c3c2b7;
+  padding: .2em 0;
+  cursor: pointer;
+  font: inherit;
+}
+.emularity-lan-panel .lan-graph-legend-item .lan-graph-key-area {
+  width: 10px;
+  height: 10px;
+}
+.emularity-lan-panel .lan-graph-legend-item[aria-pressed="false"] {
+  color: #555;
+  text-decoration: line-through;
+}
+.emularity-lan-panel .lan-graph-legend-item[aria-pressed="false"] .lan-graph-key {
+  opacity: .3;
+}
+.emularity-lan-panel .lan-graph-empty {
+  color: #898781;
+}
+
