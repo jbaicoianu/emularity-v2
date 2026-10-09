@@ -1,0 +1,7 @@
+{
+  "url": "wss://ppp.example.com/",
+  "username": "user",
+  "password": "password",
+  "dns": "1.1.1.1",
+  "enabled": true
+}
