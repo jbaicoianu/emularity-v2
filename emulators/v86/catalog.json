@@ -1,0 +1,1555 @@
+{
+ "source": "/tmp/claude-1000/-home-bai-src-emularity-v2/8fd1c875-3958-490f-acd8-2bf841ecee05/scratchpad/v86main.js",
+ "imported": "2026-10-02",
+ "machines": [
+  {
+   "id": "archlinux",
+   "name": "Arch Linux",
+   "config": {
+    "memory_size": 536870912,
+    "vga_memory_size": 8388608,
+    "filesystem": {
+     "baseurl": "{host}arch/",
+     "basefs": {
+      "url": "{host}fs.json"
+     }
+    },
+    "cmdline": "rw apm=off vga=0x344 video=vesafb:ypan,vremap:8 root=host9p rootfstype=9p rootflags=trans=virtio,cache=loose mitigations=off audit=0 init_on_free=on tsc=reliable random.trust_cpu=on nowatchdog init=/usr/bin/init-openrc net.ifnames=0 biosdevname=0",
+    "bzimage_initrd_from_filesystem": true,
+    "net_device": {
+     "type": "virtio"
+    }
+   }
+  },
+  {
+   "id": "copy/skiffos",
+   "name": "SkiffOS",
+   "config": {
+    "cdrom": {
+     "url": "{host}skiffos/.iso",
+     "size": 124672000,
+     "async": true,
+     "fixed_chunk_size": 1048576,
+     "use_parts": true
+    },
+    "memory_size": 536870912
+   }
+  },
+  {
+   "id": "serenity",
+   "name": "SerenityOS",
+   "homepage": "https://serenityos.org/",
+   "config": {
+    "hda": {
+     "url": "{host}serenity-v3/.img.zst",
+     "size": 734003200,
+     "async": true,
+     "fixed_chunk_size": 1048576,
+     "use_parts": true
+    },
+    "memory_size": 536870912
+   }
+  },
+  {
+   "id": "redox",
+   "name": "Redox",
+   "homepage": "https://www.redox-os.org/",
+   "config": {
+    "hda": {
+     "url": "{host}redox_demo_i686_2024-09-07_1225_harddrive/.img",
+     "size": 671088640,
+     "async": true,
+     "fixed_chunk_size": 1048576,
+     "use_parts": true
+    },
+    "memory_size": 1073741824,
+    "acpi": true
+   }
+  },
+  {
+   "id": "helenos",
+   "name": "HelenOS",
+   "homepage": "http://www.helenos.org/",
+   "config": {
+    "memory_size": 268435456,
+    "cdrom": {
+     "url": "{host}HelenOS-0.14.1-ia32.iso",
+     "size": 25792512,
+     "async": false
+    }
+   }
+  },
+  {
+   "id": "fiwix",
+   "name": "FiwixOS",
+   "homepage": "https://www.fiwix.org/",
+   "config": {
+    "memory_size": 268435456,
+    "hda": {
+     "url": "{host}FiwixOS-3.4-i386/.img",
+     "size": 1073741824,
+     "async": true,
+     "fixed_chunk_size": 1048576,
+     "use_parts": true
+    }
+   }
+  },
+  {
+   "id": "haiku",
+   "name": "Haiku",
+   "homepage": "https://www.haiku-os.org/",
+   "config": {
+    "memory_size": 536870912,
+    "hda": {
+     "url": "{host}haiku-v5/.img",
+     "size": 1342177280,
+     "async": true,
+     "fixed_chunk_size": 1048576,
+     "use_parts": true
+    },
+    "acpi": true
+   }
+  },
+  {
+   "id": "beos",
+   "name": "BeOS 5",
+   "config": {
+    "memory_size": 536870912,
+    "hda": {
+     "url": "{host}beos5/.img",
+     "size": 536870912,
+     "async": true,
+     "fixed_chunk_size": 1048576,
+     "use_parts": true
+    }
+   }
+  },
+  {
+   "id": "msdos",
+   "name": "MS-DOS 6.22",
+   "config": {
+    "hda": {
+     "url": "{host}msdos622/.img",
+     "size": 67108864,
+     "async": true,
+     "fixed_chunk_size": 262144,
+     "use_parts": true
+    }
+   }
+  },
+  {
+   "id": "msdos4",
+   "name": "MS-DOS 4",
+   "config": {
+    "fda": {
+     "url": "{host}msdos4.img",
+     "size": 1474560
+    }
+   }
+  },
+  {
+   "id": "freedos",
+   "name": "FreeDOS",
+   "config": {
+    "fda": {
+     "url": "{host}freedos722.img",
+     "size": 737280
+    }
+   }
+  },
+  {
+   "id": "doof",
+   "name": "DOOF",
+   "homepage": "https://github.com/fragglet/squashware",
+   "config": {
+    "fda": {
+     "url": "{host}doof-1440.img",
+     "size": 1474560
+    }
+   }
+  },
+  {
+   "id": "quantixos",
+   "name": "QuantixOS",
+   "homepage": "https://github.com/MrGilli/QuantixOS",
+   "config": {
+    "cdrom": {
+     "url": "{host}quantixos.iso",
+     "size": 11784192,
+     "async": false
+    }
+   }
+  },
+  {
+   "id": "chip4504",
+   "name": "Chip4504",
+   "homepage": "https://github.com/RelativisticMechanic/chip4504",
+   "config": {
+    "fda": {
+     "url": "{host}chip4504.img",
+     "size": 1474560
+    }
+   }
+  },
+  {
+   "id": "forthos",
+   "name": "ForthOS",
+   "homepage": "http://sources.vsta.org/forthos/",
+   "config": {
+    "hda": {
+     "url": "{host}forthos20.img.zst",
+     "size": 95420416,
+     "async": false
+    },
+    "memory_size": 134217728
+   }
+  },
+  {
+   "id": "chimaeraos",
+   "name": "Chimaera OS",
+   "homepage": "https://chimaeraos.org/",
+   "config": {
+    "hda": {
+     "url": "{host}chimaeraos.img",
+     "size": 34120704,
+     "async": false
+    }
+   }
+  },
+  {
+   "id": "freegem",
+   "name": "Freedos with FreeGEM",
+   "config": {
+    "hda": {
+     "url": "{host}freegem/.bin",
+     "size": 209715200,
+     "async": true,
+     "fixed_chunk_size": 262144,
+     "use_parts": true
+    }
+   }
+  },
+  {
+   "id": "xcom",
+   "name": "Freedos with Xcom",
+   "homepage": "http://xcom.infora.hu/index.html",
+   "config": {
+    "fda": {
+     "url": "{host}xcom144.img",
+     "size": 1474560
+    }
+   }
+  },
+  {
+   "id": "psychdos",
+   "name": "PsychDOS",
+   "homepage": "https://psychoslinux.gitlab.io/DOS/INDEX.HTM",
+   "config": {
+    "hda": {
+     "url": "{host}psychdos/.img",
+     "size": 549453824,
+     "async": true,
+     "fixed_chunk_size": 262144,
+     "use_parts": true
+    }
+   }
+  },
+  {
+   "id": "86dos",
+   "name": "86-DOS",
+   "homepage": "https://www.os2museum.com/wp/pc-86-dos/",
+   "config": {
+    "fda": {
+     "url": "{host}pc86dos.img",
+     "size": 163840
+    }
+   }
+  },
+  {
+   "id": "oberon",
+   "name": "Oberon",
+   "config": {
+    "hda": {
+     "url": "{host}oberon.img",
+     "size": 25165824,
+     "async": false
+    }
+   }
+  },
+  {
+   "id": "gentleos16",
+   "name": "GentleOS/16",
+   "homepage": "https://github.com/luke8086/gentleos",
+   "config": {
+    "fda": {
+     "url": "{host}gentleos16-fd1440.img",
+     "size": 1474560
+    }
+   }
+  },
+  {
+   "id": "gentleos32",
+   "name": "GentleOS/32",
+   "homepage": "https://github.com/luke8086/gentleos32",
+   "config": {
+    "hda": {
+     "url": "{host}gentleos32-disk.img",
+     "size": 8388608,
+     "async": false
+    }
+   }
+  },
+  {
+   "id": "windows1",
+   "name": "Windows 1.01",
+   "config": {
+    "fda": {
+     "url": "{host}windows101.img",
+     "size": 1474560
+    }
+   }
+  },
+  {
+   "id": "windows2",
+   "name": "Windows 2.03",
+   "config": {
+    "hda": {
+     "url": "{host}windows2.img",
+     "size": 4177920,
+     "async": false
+    }
+   }
+  },
+  {
+   "id": "linux26",
+   "name": "Linux",
+   "config": {
+    "cdrom": {
+     "url": "{host}linux.iso",
+     "size": 6547456,
+     "async": false
+    }
+   }
+  },
+  {
+   "id": "linux3",
+   "name": "Linux",
+   "config": {
+    "cdrom": {
+     "url": "{host}linux3.iso",
+     "size": 8638464,
+     "async": false
+    }
+   }
+  },
+  {
+   "id": "linux4",
+   "name": "Linux",
+   "config": {
+    "cdrom": {
+     "url": "{host}linux4.iso",
+     "size": 7731200,
+     "async": false
+    },
+    "filesystem": {}
+   }
+  },
+  {
+   "id": "buildroot",
+   "name": "Buildroot Linux",
+   "config": {
+    "bzimage": {
+     "url": "{host}buildroot-bzimage.bin",
+     "size": 5166352,
+     "async": false
+    },
+    "filesystem": {},
+    "cmdline": "tsc=reliable mitigations=off random.trust_cpu=on",
+    "mouse_disabled_default": true
+   }
+  },
+  {
+   "id": "buildroot6",
+   "name": "Buildroot Linux 6.8",
+   "config": {
+    "bzimage": {
+     "url": "{host}buildroot-bzimage68.bin",
+     "size": 10068480,
+     "async": false
+    },
+    "filesystem": {},
+    "cmdline": "tsc=reliable mitigations=off random.trust_cpu=on"
+   }
+  },
+  {
+   "id": "basiclinux",
+   "name": "BasicLinux",
+   "config": {
+    "hda": {
+     "url": "{host}bl3-5.img",
+     "size": 104857600,
+     "async": false
+    }
+   }
+  },
+  {
+   "id": "xpud",
+   "name": "xPUD",
+   "config": {
+    "cdrom": {
+     "url": "{host}xpud-0.9.2.iso",
+     "size": 67108864,
+     "async": false
+    },
+    "memory_size": 268435456
+   }
+  },
+  {
+   "id": "elks",
+   "name": "ELKS",
+   "homepage": "https://github.com/ghaerr/elks",
+   "config": {
+    "hda": {
+     "url": "{host}elks-hd32-fat.img",
+     "size": 32514048,
+     "async": false
+    }
+   }
+  },
+  {
+   "id": "nodeos",
+   "name": "NodeOS",
+   "config": {
+    "bzimage": {
+     "url": "{host}nodeos-kernel.bin",
+     "size": 14452000,
+     "async": false
+    },
+    "cmdline": "tsc=reliable mitigations=off random.trust_cpu=on"
+   }
+  },
+  {
+   "id": "dsl",
+   "name": "Damn Small Linux",
+   "homepage": "http://www.damnsmalllinux.org/",
+   "config": {
+    "memory_size": 268435456,
+    "cdrom": {
+     "url": "{host}dsl-4.11.rc2.iso",
+     "size": 52824064,
+     "async": false
+    }
+   }
+  },
+  {
+   "id": "xwoaf",
+   "name": "xwoaf",
+   "homepage": "https://pupngo.dk/xwinflpy/xwoaf_rebuild.html",
+   "config": {
+    "memory_size": 268435456,
+    "cdrom": {
+     "url": "{host}xwoaf_rebuild4.iso",
+     "size": 2205696,
+     "async": false
+    }
+   }
+  },
+  {
+   "id": "minix",
+   "name": "Minix",
+   "homepage": "https://www.minix3.org/",
+   "config": {
+    "memory_size": 268435456,
+    "cdrom": {
+     "url": "{host}minix-3.3.0/.iso",
+     "size": 605581312,
+     "async": true,
+     "fixed_chunk_size": 1048576,
+     "use_parts": true
+    }
+   }
+  },
+  {
+   "id": "unix-v7",
+   "name": "Unix V7",
+   "config": {
+    "hda": {
+     "url": "{host}unix-v7x86-0.8a/.img",
+     "size": 152764416,
+     "async": true,
+     "fixed_chunk_size": 262144,
+     "use_parts": true
+    }
+   }
+  },
+  {
+   "id": "kolibrios",
+   "name": "KolibriOS",
+   "homepage": "https://kolibrios.org/en/",
+   "config": {
+    "fda": {
+     "url": "{host}kolibri.img",
+     "size": 1474560
+    }
+   }
+  },
+  {
+   "id": "mu",
+   "name": "Mu",
+   "homepage": "https://github.com/akkartik/mu",
+   "config": {
+    "hda": {
+     "url": "{host}mu-shell.img",
+     "size": 10321920,
+     "async": false
+    },
+    "memory_size": 268435456,
+    "mouse_disabled_default": true
+   }
+  },
+  {
+   "id": "sortix",
+   "name": "Sortix",
+   "config": {
+    "cdrom": {
+     "url": "{host}sortix-1.0-i686.iso",
+     "size": 71075840,
+     "async": false
+    },
+    "memory_size": 536870912
+   }
+  },
+  {
+   "id": "openbsd",
+   "name": "OpenBSD",
+   "config": {
+    "hda": {
+     "url": "{host}openbsd/.img",
+     "size": 1073741824,
+     "async": true,
+     "fixed_chunk_size": 1048576,
+     "use_parts": true
+    },
+    "memory_size": 268435456
+   }
+  },
+  {
+   "id": "netbsd",
+   "name": "NetBSD",
+   "config": {
+    "hda": {
+     "url": "{host}netbsd/.img",
+     "size": 511000064,
+     "async": true,
+     "fixed_chunk_size": 1048576,
+     "use_parts": true
+    },
+    "memory_size": 268435456
+   }
+  },
+  {
+   "id": "crazierl",
+   "name": "Crazierl",
+   "config": {
+    "multiboot": {
+     "url": "{host}crazierl-elf-2026.img",
+     "size": 919492,
+     "async": false
+    },
+    "initrd": {
+     "url": "{host}crazierl-initrd-2026.img",
+     "size": 20960021,
+     "async": false
+    },
+    "acpi": true,
+    "cmdline": "kernel /libexec/ld-elf32.so.1",
+    "memory_size": 134217728,
+    "net_device": {
+     "type": "virtio"
+    }
+   }
+  },
+  {
+   "id": "solos",
+   "name": "Sol OS",
+   "homepage": "http://oby.ro/os/",
+   "config": {
+    "fda": {
+     "url": "{host}os8.img",
+     "size": 1474560
+    }
+   }
+  },
+  {
+   "id": "bootchess",
+   "name": "BootChess",
+   "homepage": "http://www.pouet.net/prod.php?which=64962",
+   "config": {
+    "fda": {
+     "url": "{host}bootchess.img",
+     "size": 1474560
+    }
+   }
+  },
+  {
+   "id": "bootbasic",
+   "name": "bootBASIC",
+   "homepage": "https://github.com/nanochess/bootBASIC",
+   "config": {
+    "fda": {
+     "url": "{host}bootbasic.img",
+     "size": 512
+    }
+   }
+  },
+  {
+   "id": "bootlogo",
+   "name": "bootLogo",
+   "homepage": "https://github.com/nanochess/bootLogo",
+   "config": {
+    "fda": {
+     "url": "{host}bootlogo.img",
+     "size": 512
+    }
+   }
+  },
+  {
+   "id": "pillman",
+   "name": "Pillman",
+   "homepage": "https://github.com/nanochess/Pillman",
+   "config": {
+    "fda": {
+     "url": "{host}pillman.img",
+     "size": 512
+    }
+   }
+  },
+  {
+   "id": "invaders",
+   "name": "Invaders",
+   "homepage": "https://github.com/nanochess/Invaders",
+   "config": {
+    "fda": {
+     "url": "{host}invaders.img",
+     "size": 512
+    }
+   }
+  },
+  {
+   "id": "bootos",
+   "name": "bootOS",
+   "homepage": "https://github.com/nanochess/bootOS",
+   "config": {
+    "fda": {
+     "url": "{host}bootos-all.img",
+     "size": 368640
+    }
+   }
+  },
+  {
+   "id": "sectorlisp",
+   "name": "SectorLISP",
+   "homepage": "https://justine.lol/sectorlisp2/",
+   "config": {
+    "fda": {
+     "url": "{host}sectorlisp-friendly.bin",
+     "size": 512
+    }
+   }
+  },
+  {
+   "id": "sectorforth",
+   "name": "sectorforth",
+   "homepage": "https://github.com/cesarblum/sectorforth",
+   "config": {
+    "fda": {
+     "url": "{host}sectorforth.img",
+     "size": 512
+    }
+   }
+  },
+  {
+   "id": "floppybird",
+   "name": "Floppy Bird",
+   "homepage": "http://mihail.co/floppybird",
+   "config": {
+    "fda": {
+     "url": "{host}floppybird.img",
+     "size": 1474560
+    }
+   }
+  },
+  {
+   "id": "stillalive",
+   "name": "Still Alive",
+   "homepage": "https://github.com/maniekx86/stillalive-os",
+   "config": {
+    "fda": {
+     "url": "{host}stillalive-os.img",
+     "size": 368640
+    }
+   }
+  },
+  {
+   "id": "hello-v86",
+   "name": "Hello v86",
+   "config": {
+    "fda": {
+     "url": "{host}hello-v86.img",
+     "size": 512
+    }
+   }
+  },
+  {
+   "id": "tetros",
+   "name": "TetrOS",
+   "homepage": "https://github.com/daniel-e/tetros",
+   "config": {
+    "fda": {
+     "url": "{host}tetros.img",
+     "size": 512
+    }
+   }
+  },
+  {
+   "id": "dino",
+   "name": "dino",
+   "homepage": "https://github.com/franeklubi/dino",
+   "config": {
+    "fda": {
+     "url": "{host}bootdino.img",
+     "size": 512
+    }
+   }
+  },
+  {
+   "id": "bootrogue",
+   "name": "bootRogue",
+   "homepage": "https://github.com/nanochess/bootRogue",
+   "config": {
+    "fda": {
+     "url": "{host}bootrogue.img",
+     "size": 512
+    }
+   }
+  },
+  {
+   "id": "duskos",
+   "name": "Dusk OS",
+   "homepage": "http://duskos.org/",
+   "config": {
+    "hda": {
+     "url": "{host}duskos.img",
+     "async": false,
+     "size": 8388608
+    }
+   }
+  },
+  {
+   "id": "windows2000",
+   "name": "Windows 2000",
+   "config": {
+    "memory_size": 536870912,
+    "hda": {
+     "url": "{host}windows2k-v2/.img",
+     "size": 2147483648,
+     "async": true,
+     "fixed_chunk_size": 262144,
+     "use_parts": true
+    }
+   }
+  },
+  {
+   "id": "windowsnt4",
+   "name": "Windows NT 4.0",
+   "config": {
+    "memory_size": 536870912,
+    "hda": {
+     "url": "{host}winnt4_noacpi/.img",
+     "size": 523837440,
+     "async": true,
+     "fixed_chunk_size": 262144,
+     "use_parts": true
+    },
+    "cpuid_level": 2
+   }
+  },
+  {
+   "id": "windowsnt35",
+   "name": "Windows NT 3.51",
+   "config": {
+    "memory_size": 268435456,
+    "hda": {
+     "url": "{host}windowsnt351-v2/.img",
+     "size": 163577856,
+     "async": true,
+     "fixed_chunk_size": 262144,
+     "use_parts": true
+    }
+   }
+  },
+  {
+   "id": "windowsnt3",
+   "name": "Windows NT 3.1",
+   "config": {
+    "memory_size": 268435456,
+    "hda": {
+     "url": "{host}winnt31/.img",
+     "size": 91226112,
+     "async": true,
+     "fixed_chunk_size": 262144,
+     "use_parts": true
+    }
+   }
+  },
+  {
+   "id": "windows98",
+   "name": "Windows 98",
+   "config": {
+    "memory_size": 134217728,
+    "hda": {
+     "url": "{host}windows98/.img",
+     "size": 314572800,
+     "async": true,
+     "fixed_chunk_size": 262144,
+     "use_parts": true
+    }
+   }
+  },
+  {
+   "id": "windows95",
+   "name": "Windows 95",
+   "config": {
+    "memory_size": 67108864,
+    "hda": {
+     "url": "{host}windows95-v3/.img",
+     "size": 471859200,
+     "async": true,
+     "fixed_chunk_size": 262144,
+     "use_parts": true
+    }
+   }
+  },
+  {
+   "id": "windows30-old",
+   "name": "Windows 3.0",
+   "config": {
+    "memory_size": 67108864,
+    "cdrom": {
+     "url": "{host}Win30.iso",
+     "size": 7774208,
+     "async": false
+    }
+   }
+  },
+  {
+   "id": "windows30",
+   "name": "Windows 3.0",
+   "config": {
+    "memory_size": 134217728,
+    "hda": {
+     "url": "{host}windows30.img",
+     "size": 25165824,
+     "async": false
+    }
+   }
+  },
+  {
+   "id": "windows31",
+   "name": "Windows 3.1",
+   "config": {
+    "memory_size": 67108864,
+    "hda": {
+     "url": "{host}win31.img",
+     "async": false,
+     "size": 34463744
+    }
+   }
+  },
+  {
+   "id": "tilck",
+   "name": "Tilck",
+   "homepage": "https://github.com/vvaltchev/tilck",
+   "config": {
+    "memory_size": 134217728,
+    "hda": {
+     "url": "{host}tilck.img",
+     "async": false,
+     "size": 37748736
+    }
+   }
+  },
+  {
+   "id": "littlekernel",
+   "name": "Little Kernel",
+   "homepage": "https://github.com/littlekernel/lk",
+   "config": {
+    "multiboot": {
+     "url": "{host}littlekernel-multiboot.img",
+     "async": false,
+     "size": 969580
+    }
+   }
+  },
+  {
+   "id": "sanos",
+   "name": "Sanos",
+   "homepage": "http://www.jbox.dk/sanos/",
+   "config": {
+    "memory_size": 134217728,
+    "hda": {
+     "url": "{host}sanos-flp.img",
+     "async": false,
+     "size": 1474560
+    }
+   }
+  },
+  {
+   "id": "386bsd",
+   "name": "386BSD",
+   "homepage": "https://en.wikipedia.org/wiki/386BSD",
+   "config": {
+    "memory_size": 67108864,
+    "hda": {
+     "url": "{host}386bsd/.img",
+     "size": 536870912,
+     "async": true,
+     "fixed_chunk_size": 1048576,
+     "use_parts": true
+    }
+   }
+  },
+  {
+   "id": "freebsd",
+   "name": "FreeBSD",
+   "config": {
+    "memory_size": 268435456,
+    "hda": {
+     "url": "{host}freebsd/.img",
+     "size": 2147483648,
+     "async": true,
+     "fixed_chunk_size": 1048576,
+     "use_parts": true
+    }
+   }
+  },
+  {
+   "id": "reactos",
+   "name": "ReactOS",
+   "homepage": "https://reactos.org/",
+   "config": {
+    "memory_size": 536870912,
+    "hda": {
+     "url": "{host}reactos-v2/.img",
+     "size": 681574400,
+     "async": true,
+     "fixed_chunk_size": 1048576,
+     "use_parts": true
+    },
+    "acpi": true
+   }
+  },
+  {
+   "id": "skift",
+   "name": "Skift",
+   "homepage": "https://skiftos.org/",
+   "config": {
+    "cdrom": {
+     "url": "{host}skift-20200910.iso",
+     "size": 64452608,
+     "async": false
+    }
+   }
+  },
+  {
+   "id": "snowdrop",
+   "name": "Snowdrop",
+   "homepage": "http://www.sebastianmihai.com/snowdrop/",
+   "config": {
+    "fda": {
+     "url": "{host}snowdrop.img",
+     "size": 1474560
+    }
+   }
+  },
+  {
+   "id": "openwrt",
+   "name": "OpenWrt",
+   "config": {
+    "hda": {
+     "url": "{host}openwrt-18.06.1-x86-legacy-combined-squashfs.img",
+     "size": 19846474,
+     "async": false
+    }
+   }
+  },
+  {
+   "id": "qnx",
+   "name": "QNX 4.05",
+   "config": {
+    "fda": {
+     "url": "{host}qnx-demo-network-4.05.img",
+     "size": 1474560
+    }
+   }
+  },
+  {
+   "id": "9front",
+   "name": "9front",
+   "homepage": "https://9front.org/",
+   "config": {
+    "memory_size": 134217728,
+    "hda": {
+     "url": "{host}9front-10931.386/.iso",
+     "size": 489453568,
+     "async": true,
+     "fixed_chunk_size": 1048576,
+     "use_parts": true
+    },
+    "acpi": true
+   }
+  },
+  {
+   "id": "9legacy",
+   "name": "9legacy",
+   "homepage": "http://www.9legacy.org/",
+   "config": {
+    "memory_size": 536870912,
+    "hda": {
+     "url": "{host}9legacy.img",
+     "async": false,
+     "size": 16000000
+    }
+   }
+  },
+  {
+   "id": "mobius",
+   "name": "Mobius",
+   "config": {
+    "fda": {
+     "url": "{host}mobius-fd-release5.img",
+     "size": 1474560
+    }
+   }
+  },
+  {
+   "id": "android",
+   "name": "Android",
+   "config": {
+    "memory_size": 536870912,
+    "cdrom": {
+     "url": "{host}android-x86-1.6-r2/.iso",
+     "size": 54661120,
+     "async": true,
+     "fixed_chunk_size": 1048576,
+     "use_parts": true
+    }
+   }
+  },
+  {
+   "id": "android4",
+   "name": "Android 4",
+   "config": {
+    "memory_size": 536870912,
+    "cdrom": {
+     "url": "{host}android_x86_nonsse3_4.4r1_20140904/.iso",
+     "size": 247463936,
+     "async": true,
+     "fixed_chunk_size": 1048576,
+     "use_parts": true
+    }
+   }
+  },
+  {
+   "id": "tinycore",
+   "name": "Tinycore",
+   "homepage": "http://www.tinycorelinux.net/",
+   "config": {
+    "memory_size": 268435456,
+    "hda": {
+     "url": "{host}TinyCore-11.0.iso",
+     "size": 19922944,
+     "async": false
+    }
+   }
+  },
+  {
+   "id": "slitaz",
+   "name": "SliTaz",
+   "homepage": "https://slitaz.org/",
+   "config": {
+    "memory_size": 536870912,
+    "hda": {
+     "url": "{host}slitaz-rolling-2024.iso",
+     "size": 56573952,
+     "async": false
+    }
+   }
+  },
+  {
+   "id": "freenos",
+   "name": "FreeNOS",
+   "homepage": "http://www.freenos.org/",
+   "config": {
+    "memory_size": 268435456,
+    "cdrom": {
+     "url": "{host}FreeNOS-1.0.3.iso",
+     "async": false,
+     "size": 11014144
+    },
+    "acpi": true
+   }
+  },
+  {
+   "id": "syllable",
+   "name": "Syllable",
+   "homepage": "http://syllable.metaproject.frl/",
+   "config": {
+    "memory_size": 536870912,
+    "hda": {
+     "url": "{host}syllable-destop-0.6.7/.img",
+     "async": true,
+     "size": 524288000,
+     "fixed_chunk_size": 524288,
+     "use_parts": true
+    }
+   }
+  },
+  {
+   "id": "toaruos",
+   "name": "ToaruOS",
+   "homepage": "https://toaruos.org/",
+   "config": {
+    "memory_size": 536870912,
+    "cdrom": {
+     "url": "{host}toaruos-1.6.1-core.iso",
+     "size": 67567616,
+     "async": false
+    },
+    "acpi": true
+   }
+  },
+  {
+   "id": "nopeos",
+   "name": "Nope OS",
+   "homepage": "https://github.com/d99kris/nopeos",
+   "config": {
+    "cdrom": {
+     "url": "{host}nopeos-0.1.iso",
+     "size": 532480,
+     "async": false
+    }
+   }
+  },
+  {
+   "id": "soso",
+   "name": "Soso",
+   "homepage": "https://github.com/ozkl/soso",
+   "config": {
+    "cdrom": {
+     "url": "{host}soso.iso",
+     "size": 22546432,
+     "async": false
+    }
+   }
+  },
+  {
+   "id": "pcmos",
+   "name": "PC-MOS/386",
+   "homepage": "https://github.com/roelandjansen/pcmos386v501",
+   "config": {
+    "fda": {
+     "url": "{host}PCMOS386-9-user-patched.img",
+     "size": 1474560
+    }
+   }
+  },
+  {
+   "id": "jx",
+   "name": "JX",
+   "homepage": "https://www4.cs.fau.de/Projects/JX/index.html",
+   "config": {
+    "fda": {
+     "url": "{host}jx-demo.img",
+     "size": 1474560
+    }
+   }
+  },
+  {
+   "id": "house",
+   "name": "House",
+   "homepage": "https://programatica.cs.pdx.edu/House/",
+   "config": {
+    "fda": {
+     "url": "{host}hOp-0.8.img",
+     "size": 1474560
+    }
+   }
+  },
+  {
+   "id": "bleskos",
+   "name": "BleskOS",
+   "homepage": "https://github.com/VendelinSlezak/BleskOS",
+   "config": {
+    "cdrom": {
+     "url": "{host}bleskos_2024u32.iso",
+     "size": 1835008,
+     "async": false
+    }
+   }
+  },
+  {
+   "id": "boneos",
+   "name": "BoneOS",
+   "homepage": "https://amanuel.io/projects/BoneOS/",
+   "config": {
+    "cdrom": {
+     "url": "{host}BoneOS.iso",
+     "size": 11429888,
+     "async": false
+    }
+   }
+  },
+  {
+   "id": "mikeos",
+   "name": "MikeOS",
+   "homepage": "https://mikeos.sourceforge.net/",
+   "config": {
+    "cdrom": {
+     "url": "{host}mikeos.iso",
+     "size": 3311616,
+     "async": false
+    }
+   }
+  },
+  {
+   "id": "bluejay",
+   "name": "Blue Jay",
+   "homepage": "https://archiveos.org/blue-jay/",
+   "config": {
+    "fda": {
+     "url": "{host}bj050.img",
+     "size": 1474560
+    }
+   }
+  },
+  {
+   "id": "t3xforth",
+   "name": "T3XFORTH",
+   "homepage": "https://t3x.org/t3xforth/",
+   "config": {
+    "fda": {
+     "url": "{host}t3xforth.img",
+     "size": 1474560
+    }
+   }
+  },
+  {
+   "id": "nanoshell",
+   "name": "NanoShell",
+   "homepage": "https://github.com/iProgramMC/NanoShellOS",
+   "config": {
+    "cdrom": {
+     "url": "{host}nanoshell.iso",
+     "size": 6785024,
+     "async": false
+    }
+   }
+  },
+  {
+   "id": "catk",
+   "name": "CatK",
+   "homepage": "https://catk.neocities.org/",
+   "config": {
+    "cdrom": {
+     "url": "{host}catkernel.iso",
+     "size": 11968512,
+     "async": false
+    }
+   }
+  },
+  {
+   "id": "mcp",
+   "name": "M/CP",
+   "homepage": "https://github.com/ybuzoku/MCP",
+   "config": {
+    "fda": {
+     "url": "{host}mcp2.img",
+     "size": 512
+    }
+   }
+  },
+  {
+   "id": "ibm-exploring",
+   "name": "Exploring The IBM Personal Computer",
+   "config": {
+    "fda": {
+     "url": "{host}ibm-exploring.img",
+     "size": 368640
+    }
+   }
+  },
+  {
+   "id": "leetos",
+   "name": "lEEt/OS",
+   "homepage": "http://sininenankka.dy.fi/leetos/index.php",
+   "config": {
+    "fda": {
+     "url": "{host}leetos.img",
+     "size": 1474560
+    }
+   }
+  },
+  {
+   "id": "newos",
+   "name": "NewOS",
+   "homepage": "https://newos.org/",
+   "config": {
+    "fda": {
+     "url": "{host}newos-flp.img",
+     "size": 1474560,
+     "async": false
+    }
+   }
+  },
+  {
+   "id": "newos-notion",
+   "name": "NewOS Notion",
+   "homepage": "http://notion.muelln-kommune.net/newos.html",
+   "config": {
+    "hda": {
+     "url": "{host}newos-notion.img",
+     "size": 4128768,
+     "async": false
+    },
+    "memory_size": 134217728
+   }
+  },
+  {
+   "id": "aros-broadway",
+   "name": "AROS Broadway",
+   "homepage": "https://web.archive.org/web/20231109224346/http://www.aros-broadway.de/",
+   "config": {
+    "memory_size": 536870912,
+    "cdrom": {
+     "url": "{host}broadway10/.iso",
+     "size": 742051840,
+     "async": true,
+     "fixed_chunk_size": 524288,
+     "use_parts": true
+    }
+   }
+  },
+  {
+   "id": "icaros",
+   "name": "Icaros Desktop",
+   "homepage": "http://vmwaros.blogspot.com/",
+   "config": {
+    "memory_size": 536870912,
+    "cdrom": {
+     "url": "{host}icaros-pc-i386-2.3/.iso",
+     "size": 726511616,
+     "async": true,
+     "fixed_chunk_size": 524288,
+     "use_parts": true
+    }
+   }
+  },
+  {
+   "id": "tinyaros",
+   "name": "Tiny Aros",
+   "homepage": "https://www.tinyaros.it/",
+   "config": {
+    "memory_size": 536870912,
+    "cdrom": {
+     "url": "{host}tinyaros-pc-i386/.iso",
+     "size": 111175680,
+     "async": true,
+     "fixed_chunk_size": 524288,
+     "use_parts": true
+    }
+   }
+  },
+  {
+   "id": "dancy",
+   "name": "Dancy",
+   "homepage": "https://github.com/Tiihala/Dancy",
+   "config": {
+    "cdrom": {
+     "url": "{host}dancy.iso",
+     "size": 10485760,
+     "async": false
+    }
+   }
+  },
+  {
+   "id": "curios",
+   "name": "CuriOS",
+   "homepage": "https://github.com/h5n1xp/CuriOS",
+   "config": {
+    "hda": {
+     "url": "{host}curios.img",
+     "size": 83886080,
+     "async": false
+    }
+   }
+  },
+  {
+   "id": "os64",
+   "name": "OS64",
+   "homepage": "https://os64.blogspot.com/",
+   "config": {
+    "cdrom": {
+     "url": "{host}os64boot.iso",
+     "size": 5580800,
+     "async": false
+    }
+   }
+  },
+  {
+   "id": "ipxe",
+   "name": "iPXE",
+   "homepage": "https://ipxe.org/",
+   "config": {
+    "cdrom": {
+     "url": "{host}ipxe.iso",
+     "size": 4194304,
+     "async": false
+    }
+   }
+  },
+  {
+   "id": "netboot.xyz",
+   "name": "netboot.xyz",
+   "homepage": "https://netboot.xyz/",
+   "config": {
+    "cdrom": {
+     "url": "{host}netboot.xyz.iso",
+     "size": 2398208,
+     "async": false
+    },
+    "net_device": {
+     "type": "virtio"
+    }
+   }
+  },
+  {
+   "id": "squeaknos",
+   "name": "SqueakNOS",
+   "homepage": "https://squeaknos.blogspot.com/",
+   "config": {
+    "cdrom": {
+     "url": "{host}SqueakNOS.iso",
+     "size": 61171712,
+     "async": false
+    },
+    "memory_size": 536870912
+   }
+  },
+  {
+   "id": "chokanji4",
+   "name": "Chokanji 4",
+   "homepage": "https://archive.org/details/brightv4000",
+   "config": {
+    "hda": {
+     "url": "{host}chokanji4/.img.zst",
+     "size": 10737418240,
+     "async": true,
+     "fixed_chunk_size": 262144,
+     "use_parts": true
+    },
+    "memory_size": 536870912
+   }
+  },
+  {
+   "id": "archhurd",
+   "name": "Arch Hurd",
+   "homepage": "https://archhurd.org/",
+   "config": {
+    "hda": {
+     "url": "{host}archhurd-2018.09.28/.img.zst",
+     "size": 4294967296,
+     "async": true,
+     "fixed_chunk_size": 1048576,
+     "use_parts": true
+    },
+    "memory_size": 536870912
+   }
+  },
+  {
+   "id": "prettyos",
+   "name": "PrettyOS",
+   "homepage": "https://www.prettyos.de/Image.html",
+   "config": {
+    "fda": {
+     "url": "{host}prettyos.img",
+     "size": 1474560,
+     "async": false
+    }
+   }
+  },
+  {
+   "id": "vanadium",
+   "name": "Vanadium OS",
+   "homepage": "https://www.durlej.net/software.html",
+   "config": {
+    "cdrom": {
+     "url": "{host}vanadiumos.iso",
+     "size": 8388608,
+     "async": false
+    }
+   }
+  },
+  {
+   "id": "xenus",
+   "name": "XENUS",
+   "homepage": "https://www.durlej.net/xenus/",
+   "config": {
+    "hda": {
+     "url": "{host}xenushdd.img",
+     "size": 52428800,
+     "async": false
+    }
+   }
+  },
+  {
+   "id": "mojo",
+   "name": "Mojo OS",
+   "homepage": "https://archiveos.org/mojoos/",
+   "config": {
+    "cdrom": {
+     "url": "{host}mojo-0.2.2.iso",
+     "size": 4048896,
+     "async": false
+    }
+   }
+  },
+  {
+   "id": "bsdos",
+   "name": "BSD/OS",
+   "homepage": "https://en.wikipedia.org/wiki/BSD/OS",
+   "config": {
+    "memory_size": 134217728,
+    "hda": {
+     "url": "{host}bsdos43/.img.zst",
+     "size": 1073741824,
+     "async": true,
+     "fixed_chunk_size": 1048576,
+     "use_parts": true
+    }
+   }
+  },
+  {
+   "id": "asuro",
+   "name": "Asuro",
+   "homepage": "https://asuro.xyz/",
+   "config": {
+    "cdrom": {
+     "url": "{host}asuro.iso",
+     "size": 5361664,
+     "async": false
+    }
+   }
+  }
+ ]
+}
