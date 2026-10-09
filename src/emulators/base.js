@@ -52,12 +52,38 @@ export class BaseEmulator extends BaseClass {
     if (this.oncanvaschange) this.addEventListener('canvaschange', ev => new Function(this.oncanvaschange).call(this, ev));
 
     this.dispatchEvent(new CustomEvent('create'));
+    this.lockKeyboardInFullscreen();
 
     if (this.autostart) {
       setTimeout(() => {
         this.start();
       }, 0);
     }
+  }
+  /* While this emulator (or something inside it) is fullscreen, lock the keyboard, so
+     keys the browser would otherwise act on (Escape, Meta, Ctrl+W, Alt+Tab, ...) reach
+     the emulated system instead. Keyboard Lock only works in fullscreen, and only in
+     Chromium browsers; the browser tells the user to hold Escape to leave fullscreen. */
+  lockKeyboardInFullscreen() {
+    if (this.onFullscreenChange || !(navigator.keyboard && navigator.keyboard.lock)) return;
+    this.onFullscreenChange = () => {
+      let fs = document.fullscreenElement;
+      if (fs && this.isConnected && (this.contains(fs) || fs.contains(this))) {
+        navigator.keyboard.lock()
+          .then(() => { this.keyboardLocked = true; })
+          .catch(e => console.warn('Emularity: keyboard lock failed', e));
+      } else if (this.keyboardLocked) {
+        navigator.keyboard.unlock();
+        this.keyboardLocked = false;
+      }
+    };
+    document.addEventListener('fullscreenchange', this.onFullscreenChange);
+  }
+  disconnectedCallback() {
+    if (this.onFullscreenChange) document.removeEventListener('fullscreenchange', this.onFullscreenChange);
+    this.onFullscreenChange = null;
+    if (this.keyboardLocked) navigator.keyboard.unlock();
+    this.keyboardLocked = false;
   }
   loadSettingsFromAttributes() {
     let properties = Object.getOwnPropertyNames(this);
