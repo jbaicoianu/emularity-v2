@@ -12,8 +12,12 @@
      fullscreen, when the canvas aspect doesn't match the window) blend into the black
      page instead of reading as odd padding around the picture. */
   background: #000;
-  /* Nearest-neighbor scaling so upscaled low-res emulator output stays crisp
-     instead of blurring with bilinear interpolation. */
+}
+/* Nearest-neighbour scaling, so enlarged low-res output (DOS games) keeps sharp
+   pixels; emulators that want it set the class while the picture is shown at least
+   at its own size (see BaseEmulator.trackPixelScaling). Everything else scales
+   smoothly. */
+.emularity-emulator canvas.pixelated {
   image-rendering: -moz-crisp-edges;
   image-rendering: pixelated;
 }
@@ -65,8 +69,9 @@ emularity-file {
   display: block;
   outline: none; /* focused for keyboard/mouse input; no focus ring over the picture */
   margin: 0 auto;
-  image-rendering: pixelated;
-  image-rendering: -moz-crisp-edges;
+  /* Smooth: x86 guests mostly run at desktop resolutions, which nearest-neighbour
+     scaling makes uneven. (v86 sets pixelated scaling inline, hence !important.) */
+  image-rendering: auto !important;
 }
 .emularity-emulator .v86-screen:fullscreen,
 .emularity-emulator .v86-screen:-webkit-full-screen {

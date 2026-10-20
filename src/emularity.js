@@ -6,6 +6,8 @@ import { LibretroEmulator } from './emulators/libretro.js'
 import { VirtualFile } from './fs/virtualfile.js'
 import { VirtualKeyboard } from './inputs.js'
 import { LanPanel } from './net/lan-panel.js'
+import { ActivityLights } from './ui/activity-lights.js'
+import { PerformanceGraphs } from './ui/performance-graphs.js'
 
 export default {
   emulators: {
@@ -25,6 +27,10 @@ export default {
   },
   net: {
     LanPanel,
+  },
+  ui: {
+    ActivityLights,
+    PerformanceGraphs,
   },
 
 }

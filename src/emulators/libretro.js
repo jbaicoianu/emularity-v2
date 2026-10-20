@@ -137,6 +137,9 @@ export class LibretroEmulator extends BaseEmulator {
     this.dispatchEvent(new CustomEvent('canvaschange', { detail: this.canvas }));
     this.dispatchEvent(new CustomEvent('run'));
     this.startLoop();
+    // The cartridge's battery-backed save, as a device (see activity.js) that's
+    // written when the game saves (as checked every few seconds)
+    if (this.saveRam()) this.activity.setDevices([{ id: 'save', kind: 'save', label: 'Saved game', features: ['write'] }]);
     this.saveTimer = setInterval(() => this.persistSaveRam(), 5000);
     this.onPageHide = () => this.persistSaveRam();
     addEventListener('pagehide', this.onPageHide);
@@ -176,7 +179,9 @@ export class LibretroEmulator extends BaseEmulator {
         if (this.audioBuffered < 0.05) due++;
         else if (this.audioBuffered > 0.12 && due > 0) due--;
       }
+      let t = performance.now();
       for (let i = 0; i < due; i++) { this.pollGamepads(); this.runFrame(); }
+      this.meter.busy(performance.now() - t);
       done += due;
     };
     this.raf = requestAnimationFrame(loop);
@@ -304,6 +309,7 @@ export class LibretroEmulator extends BaseEmulator {
     if (this.lastSaved && this.lastSaved.every((b, i) => b == ram[i])) return; // unchanged
     let copy = ram.slice();
     this.lastSaved = copy;
+    this.activity.report('save', 'write', { bytes: copy.length });
     try {
       let db = await this.openSaves();
       let tx = db.transaction('saves', 'readwrite');

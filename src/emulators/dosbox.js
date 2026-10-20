@@ -6,6 +6,7 @@ export class DOSBoxEmulator extends BaseEmulator {
   wasmscript = 'dosbox.module.js'
   wasminit = 'createDOSBox'
   media = []  // disk images: [{ drive: 'fda'|'fdb'|'cdrom', id, name, blob | url }]
+  pixelScaling = true
 
   /* Removable-media drives. Every image for a drive is mounted at boot (IMGMOUNT
      takes a list), and DOSBox's Ctrl+F4 swaps between them; a disk can't be added
@@ -40,6 +41,32 @@ export class DOSBoxEmulator extends BaseEmulator {
     }
     let cfg = this.getConfig();
     this.fs.writeFile(this.emulatorroot + '/dosbox.conf', new TextEncoder().encode(cfg));
+    this.listActivityDevices();
+  }
+  /* Drive lights (see activity.js). DOSBox reads its drives as files: a folder for a
+     mounted drive, an image for a disk, so file reads and writes are drive activity.
+     It has no floppy motor or head to report on. */
+  listActivityDevices() {
+    let devices = [];
+    this.drivePaths = [];
+    for (let f of this.getFiles()) {
+      if (!(f.letter && f.mountpoint && f.mounttype)) continue;
+      let floppy = f.mounttype == 'floppy';
+      devices.push({ id: f.letter, kind: floppy ? 'floppy' : 'hdd', label: `Drive ${f.letter.toUpperCase()}:`, features: ['read', 'write'] });
+      this.drivePaths.push([this.emulatorroot + f.mountpoint + '/', f.letter]);
+    }
+    for (let drive in this.mounted) {
+      let d = DOSBoxEmulator.DRIVES[drive], current = this.mounted[drive][this.position[drive]];
+      devices.push({ id: drive, kind: d.kind, label: d.label, medium: current.name, features: d.kind == 'cdrom' ? ['read'] : ['read', 'write'] });
+    }
+    for (let f of this.mediaFiles()) {
+      if (f.data) this.drivePaths.push([f.imageDir ? f.imageDir + '/' : f.imagePath, f.medium.drive]);
+    }
+    this.activity.setDevices(devices);
+  }
+  activityDeviceForPath(path) {
+    let hit = (this.drivePaths || []).find(([prefix]) => path.startsWith(prefix));
+    return hit ? hit[1] : null;
   }
   getArguments() {
     let args = this.arguments.length > 0 ? this.arguments.split(' ') : [];
@@ -174,6 +201,7 @@ export class DOSBoxEmulator extends BaseEmulator {
     }
     for (let d in this.mounted) {
       let current = this.mounted[d][this.position[d]];
+      this.activity.setDevice({ id: d, medium: current.name });
       this.dispatchEvent(new CustomEvent('mediachange', { detail: { drive: d, current: { id: current.id, name: current.name } } }));
     }
   }
