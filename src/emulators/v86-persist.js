@@ -70,7 +70,8 @@ export class V86Persistence {
     for (let [channel, name] of [['primary', 'hd'], ['secondary', 'hd2']]) {
       for (let [drive, letter] of [['master', 'a'], ['slave', 'b']]) {
         let iface = ide && ide[channel] && ide[channel][drive];
-        if (iface && iface.buffer && !iface.is_atapi) found[name + letter] = iface.buffer;
+        // (a disk that keeps its own changes, such as a FileDisk, isn't ours to keep)
+        if (iface && iface.buffer && !iface.is_atapi && !iface.buffer.keepsOwnChanges) found[name + letter] = iface.buffer;
       }
     }
     (devices.fdc && devices.fdc.drives || []).forEach((d, i) => { if (d && d.buffer) found['fd' + 'ab'[i]] = d.buffer; });

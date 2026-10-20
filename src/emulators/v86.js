@@ -3,6 +3,8 @@ import { CanvasTerminal } from './canvas-terminal.js'
 import { V86Mouse } from './v86-mouse.js'
 import { LanConnection } from '../net/lan.js'
 import { V86Persistence } from './v86-persist.js'
+import { FileDisk } from './file-disk.js'
+import { PerformanceMeter } from './performance-meter.js'
 
 /* x86 PC emulator, powered by v86 (https://github.com/copy/v86). Unlike the DOSBox /
    MAME emulators, v86 is not an Emscripten module we drive through BaseEmulator's
@@ -26,6 +28,7 @@ export class V86Emulator extends BaseEmulator {
   resolution = '800x600'
   v86opts = null  // extra V86 constructor options (filesystem, cmdline, bzimage…)
   media = []      // disks in the drives at boot: [{ drive: 'fda'|'fdb'|'cdrom', id, name, blob | url }]
+  hardDisks = null // hard disks kept as files (see file-disk.js): { hda: { path, size }, hdb: ... }
 
   /* Removable-media drives (see mediaDrives / insertMedia / ejectMedia) */
   static DRIVES = {
@@ -165,51 +168,15 @@ export class V86Emulator extends BaseEmulator {
     fdc.cmd_table.emularity = true;
   }
 
-  /* Fixes to v86's CD-ROM drive, which Windows 98's CD driver needs.
-
-     - After a PACKET command, v86 raises an interrupt as it gets ready for the packet.
-       A drive only does that if it says so in IDENTIFY ("interrupt DRQ"), and v86's
-       says it doesn't, so Windows sends the packet without waiting for one; then the
-       stray interrupt reaches its handler, which finds the drive still busy with the
-       command and resets it. A disc read from memory answers before the handler runs,
-       so it works by luck; one read as it's used (a large image, a bin/cue, or one
-       from a URL) answers a moment later, every read is reset, and the disc looks
-       empty or unreadable. So the PACKET command raises no interrupt.
-     - A drive tells the system its disc was changed by answering the next command
-       with UNIT ATTENTION ("medium may have changed"), which is how Windows knows to
-       read the new disc. v86 only says so to an ATA GET MEDIA STATUS, which Windows
-       doesn't send, so after a swap Windows keeps showing the disc it read first. So
-       the first command after a change (other than those that never report one) gets
-       that answer. */
-  static patchCdrom(cd) {
-    if (!cd) return;
-    let proto = Object.getPrototypeOf(cd), command = proto.ata_command, handle = proto.atapi_handle;
-    if (!command || !handle || handle.emularity) return;
-    const PACKET = 0xa0;
-    proto.ata_command = function (cmd) {
-      if (cmd != PACKET || !this.is_atapi || !this.drive_connected) return command.apply(this, arguments);
-      // as v86 does it, but without the interrupt
-      this.current_command = cmd;
-      this.error_reg = 0;
-      this.data_allocate(12);
-      this.data_end = 12;
-      this.sector_count_reg = 1; // command/data: the packet goes to the drive
-      this.status_reg = 0x58;    // ready, DRQ
-    };
-    const REQUEST_SENSE = 0x03, INQUIRY = 0x12, GET_CONFIGURATION = 0x46, GET_EVENT_STATUS = 0x4a;
-    proto.atapi_handle = function () {
-      let cmd = this.data[0];
-      if (this.medium_changed && this.buffer && ![REQUEST_SENSE, INQUIRY, GET_CONFIGURATION, GET_EVENT_STATUS].includes(cmd)) {
-        this.medium_changed = false;
-        this.data_pointer = 0;
-        this.current_atapi_command = cmd;
-        this.atapi_check_condition_response(6, 0x28); // UNIT ATTENTION, medium changed
-        this.push_irq();
-        return;
-      }
-      return handle.apply(this, arguments);
-    };
-    proto.atapi_handle.emularity = true;
+  /* With ACPI on, the BIOS's ACPI tables (SeaBIOS's, written for QEMU) describe PCI
+     hotplug through QEMU's PIIX4 hotplug ports at 0xae00-0xae0f: slots inserted,
+     slots removed, eject, removable. v86 doesn't have them, so they read as all ones,
+     which says every slot was just removed. Linux then drops the PCI devices it found
+     (the IDE controller, network card, VGA...), so it sees no disks or CD drive. Read
+     as zeros, they say what's true: nothing was plugged in or out. */
+  static patchAcpiHotplug(cpu) {
+    let zero = () => 0;
+    for (let port = 0xae00; port < 0xae10; port++) cpu.io.register_read(port, {}, zero, zero, zero);
   }
 
   /* v86 gives its network card a random MAC address each boot, so to the LAN's DHCP
@@ -254,6 +221,20 @@ export class V86Emulator extends BaseEmulator {
     // A simple image (cdrom/hda/…) is optional: a full distro like Arch instead supplies
     // a lazily-fetched 9p root filesystem + kernel through `v86opts`.
     let media = (this.imageBlob || this.image) ? await this.resolveMedia() : {};
+    // Hard disks kept as files. (v86 only has a second hard disk with a first.)
+    this.fileDisks = [];
+    for (let drive of ['hda', 'hdb']) {
+      let disk = this.hardDisks && this.hardDisks[drive];
+      if (!disk) continue;
+      try {
+        media[drive] = await FileDisk.open(disk.path, disk.size);
+      } catch (e) {
+        this.closeFileDisks();
+        throw e;
+      }
+      this.fileDisks.push(media[drive]);
+    }
+    if (this.destroyed) return this.closeFileDisks(); // removed while opening them
     // What's in each removable drive: the main image (if it's a floppy or CD), the
     // machine's own config, then the disks asked for at boot (where the drive's free)
     this.inserted = {};
@@ -281,7 +262,9 @@ export class V86Emulator extends BaseEmulator {
     this.setStatus('Booting…');
     let V86 = self.V86 || self.V86Starter;
     let opts = Object.assign({
-      wasm_path: this.wasmroot + '/v86.wasm',
+      // v86_64 keeps RAM above 3 GB in a separate 64-bit wasm memory, in its own build
+      // (which v86 would pick itself, but only without a wasm_path)
+      wasm_path: this.wasmroot + (this.memory_size > 3072 ? '/v86-mem64.wasm' : '/v86.wasm'),
       bios: { url: this.wasmroot + '/seabios.bin' },
       vga_bios: { url: this.wasmroot + '/vgabios.bin' },
       memory_size: this.memory_size * 1024 * 1024,
@@ -315,8 +298,10 @@ export class V86Emulator extends BaseEmulator {
       try {
         if (opts.bzimage || opts.bzimage_initrd_from_filesystem) this.applyVgaMode(opts.cmdline);
         V86Emulator.patchFloppyController(this.emulator.v86.cpu.devices.fdc);
-        V86Emulator.patchCdrom(this.emulator.v86.cpu.devices.cdrom);
+        if (opts.acpi) V86Emulator.patchAcpiHotplug(this.emulator.v86.cpu);
         if (this.persist) V86Emulator.setMac(this.emulator.v86.cpu.devices, this.persist);
+        this.watchActivity(opts);
+        this.watchPerformance();
         if (this.persist) await this.restoreChanges();
         if (this.destroyed) return; // removed while restoring
         this.emulator.run();
@@ -328,6 +313,129 @@ export class V86Emulator extends BaseEmulator {
     this.emulator.add_listener('emulator-started', () => this.onV86Started());
     this.emulator.add_listener('emulator-stopped', () => this.onV86Stopped());
     this.emulator.add_listener('cpu-event-halt', () => this.onGuestHalt());
+  }
+
+  /* ----- Drive lights and the like (see activity.js) ----- */
+
+  /* v86 reports its hard disk, CD and network traffic on its bus, though not which
+     disk on a channel; and nothing for floppies. So the disks' and floppy controller's
+     own methods are hooked, which also gives floppy motors and head moves. */
+  watchActivity(opts) {
+    let cpu = this.emulator.v86.cpu, report = (id, type, info) => this.activity.report(id, type, info);
+    let devices = [];
+    for (let drive of ['fda', 'fdb']) {
+      // Every PC here has drive A:; B: only shows once there's a disk for it
+      if (drive == 'fda' || this.inserted.fdb) devices.push(this.floppyDevice(drive));
+    }
+    let ide = cpu.devices.ide, disks = [['hda', ide && ide.primary && ide.primary.master], ['hdb', ide && ide.primary && ide.primary.slave], ['cdrom', ide && ide.secondary && ide.secondary.master]];
+    for (let [id, disk] of disks) {
+      if (!disk || !disk.drive_connected) continue;
+      let cd = id == 'cdrom';
+      devices.push(cd
+        ? { id, kind: 'cdrom', label: 'CD-ROM', medium: this.inserted.cdrom ? this.inserted.cdrom.name : null, features: ['read'] }
+        : { id, kind: 'hdd', label: id == 'hda' ? 'Hard disk' : 'Second hard disk', features: ['read', 'write'] });
+      V86Emulator.hook(disk, 'report_read_end', (disk, [bytes], run) => { report(id, 'read', { bytes }); return run(); });
+      V86Emulator.hook(disk, 'report_write', (disk, [bytes], run) => { report(id, 'write', { bytes }); return run(); });
+    }
+    if (opts.filesystem && (opts.filesystem.basefs || opts.filesystem.baseurl)) {
+      devices.push({ id: 'fs', kind: 'hdd', label: 'Root filesystem', features: ['read', 'write'] });
+      this.emulator.add_listener('9p-read-end', ([, bytes]) => report('fs', 'read', { bytes }));
+      this.emulator.add_listener('9p-write-end', ([, bytes]) => report('fs', 'write', { bytes }));
+    }
+    if (this.network == 'lan' || opts.network_relay_url || opts.net_device) {
+      devices.push({ id: 'net0', kind: 'network', label: 'Network', features: ['transmit', 'receive'] });
+      this.emulator.add_listener('eth-transmit-end', ([bytes]) => report('net0', 'transmit', { bytes }));
+      this.emulator.add_listener('eth-receive-end', ([bytes]) => report('net0', 'receive', { bytes }));
+    }
+
+    let fdc = cpu.devices.fdc;
+    if (fdc && fdc.drives) {
+      let ids = ['fda', 'fdb'], proto = Object.getPrototypeOf(fdc);
+      // Head moves: seeks, recalibrates (to track 0), and reads and writes on another
+      // track. (The drive's own track number also moves on when a read runs off the
+      // end of a track, which the head doesn't, so it's kept here.)
+      let head = fdc.drives.map(d => d.curr_track);
+      let moveHead = (i, to) => {
+        if (head[i] != to) report(ids[i], 'seek', { from: head[i], to });
+        head[i] = to;
+      };
+      for (let entry of new Set(fdc.cmd_table || [])) {
+        if (!entry || (entry.name != 'SEEK' && entry.name != 'RECALIBRATE')) continue;
+        let handler = entry.handler;
+        entry.handler = function (args) {
+          moveHead(args[0] & 1, entry.name == 'SEEK' ? args[1] : 0);
+          return handler.apply(this, arguments);
+        };
+      }
+      // Reads and writes (args: drive, cylinder, head, first sector, size, last sector...)
+      V86Emulator.hook(fdc, 'start_read_write', (fdc, [args, write], run) => {
+        let sectors = Math.max(1, (args[5] - args[3] + 1) || 1);
+        moveHead(args[0] & 1, args[1]);
+        report(ids[args[0] & 1], write ? 'write' : 'read', { bytes: sectors * (128 << (args[4] & 7)) });
+        return run();
+      });
+      // Motors: bits 4 and 5 of the digital output register (port 0x3f2)
+      let motors = fdc.dor & 0x30;
+      cpu.io.register_write(0x3f2, fdc, function (value) {
+        proto.write_reg_dor.call(this, value);
+        let changed = (value & 0x30) ^ motors;
+        motors = value & 0x30;
+        if (changed & 0x10) report('fda', 'motor', { on: !!(motors & 0x10) });
+        if (changed & 0x20) report('fdb', 'motor', { on: !!(motors & 0x20) });
+      });
+    }
+    this.activity.setDevices(devices);
+  }
+  /* Run `fn(object, args, run)` in place of the object's method, where run() calls the
+     method. v86's devices are sealed objects, so their methods are replaced on their
+     prototypes (once a page), and look up which object they're running on. */
+  static hooks = new WeakMap()
+  static hook(object, name, fn) {
+    let proto = Object.getPrototypeOf(object), method = proto[name];
+    if (!method.emularityHooked) {
+      let hooks = V86Emulator.hooks;
+      proto[name] = function (...args) {
+        let h = hooks.get(this);
+        return h && h[name] ? h[name](this, args, () => method.apply(this, args)) : method.apply(this, args);
+      };
+      proto[name].emularityHooked = true;
+    }
+    let h = V86Emulator.hooks.get(object) || {};
+    h[name] = fn;
+    V86Emulator.hooks.set(object, h);
+  }
+  /* CPU graphs (see performance-meter.js). v86 runs the machine in ticks on the page's
+     main thread: the time inside them is the load. Between ticks the guest is either
+     halted (waiting for an interrupt) or was just paused to let the page run; only the
+     halted time is idle for the emulated CPU, along with ticks spent checking timers
+     while it stays halted. */
+  watchPerformance() {
+    let meter = this.meter, v86 = this.emulator.v86, cpu = v86.cpu;
+    let halted = false, since = performance.now();
+    V86Emulator.hook(v86, 'do_tick', (v86, args, run) => {
+      let start = performance.now(), wasHalted = halted;
+      if (halted) meter.halted(start - since);
+      let result = run();
+      let end = performance.now();
+      meter.busy(end - start);
+      halted = !!cpu.in_hlt[0];
+      if (wasHalted && halted) meter.halted(end - start);
+      since = end;
+      return result;
+    });
+    let instructions = null;
+    meter.sampler = (now, wall) => {
+      if (halted) { meter.halted(now - since); since = now; }
+      let count = this.emulator.get_instruction_counter() >>> 0;
+      let mips = instructions == null ? 0 : ((count - instructions) >>> 0) / wall / 1000;
+      instructions = count;
+      return { mips };
+    };
+    meter.setMetrics([PerformanceMeter.CPU, PerformanceMeter.LOAD, PerformanceMeter.MIPS]);
+  }
+  floppyDevice(drive) {
+    let current = this.inserted && this.inserted[drive];
+    return { id: drive, kind: 'floppy', label: V86Emulator.DRIVES[drive].label, medium: current ? current.name : null, features: ['read', 'write', 'seek', 'motor'] };
   }
 
   /* ----- Removable media ----- */
@@ -365,6 +473,7 @@ export class V86Emulator extends BaseEmulator {
       if (this.persistence) await this.persistence.attach(this.persistKey(drive, m.id), fdd.buffer);
     }
     this.inserted[drive] = { id: m.id, name: m.name };
+    this.activity.setDevice(drive == 'cdrom' ? { id: drive, medium: m.name } : this.floppyDevice(drive));
     this.dispatchEvent(new CustomEvent('mediachange', { detail: { drive, current: this.inserted[drive] } }));
   }
   async ejectMedia(drive) {
@@ -373,6 +482,7 @@ export class V86Emulator extends BaseEmulator {
     if (drive != 'cdrom' && this.persistence) await this.persistence.detach(this.persistKey(drive, current.id));
     this.emulator['eject_' + drive]();
     this.inserted[drive] = null;
+    if (this.activity.device(drive)) this.activity.setDevice({ id: drive, medium: null });
     this.dispatchEvent(new CustomEvent('mediachange', { detail: { drive, current: null } }));
   }
 
@@ -424,6 +534,12 @@ export class V86Emulator extends BaseEmulator {
       this.unlock();
     }
   }
+  /* Let go of the hard disk files, with everything written */
+  closeFileDisks() {
+    let disks = this.fileDisks || [];
+    this.fileDisks = [];
+    return Promise.all(disks.map(d => d.close().catch(e => console.warn('Emularity: closing a hard disk file failed', e))));
+  }
   unlock() {
     if (this.releaseLock) this.releaseLock();
     this.releaseLock = null;
@@ -443,6 +559,66 @@ export class V86Emulator extends BaseEmulator {
      Must be called from a user gesture; Escape releases it. */
   lockPointer() {
     return this.mouse ? this.mouse.lock() : Promise.reject(new Error('no mouse'));
+  }
+
+  /* ----- Keys the host keeps for itself -----
+     Ctrl+Alt+Del, Ctrl+Alt+F1, Alt+Tab, the Windows key... are often caught by the host
+     OS or the browser (even in fullscreen with the keyboard locked), so they can be sent
+     from here instead, as scancodes (set 1), by name. */
+  static SCANCODES = {
+    Ctrl: [0x1d], Alt: [0x38], Shift: [0x2a], Win: [0xe0, 0x5b],
+    Esc: [0x01], Tab: [0x0f], Backspace: [0x0e], Enter: [0x1c], Space: [0x39], Delete: [0xe0, 0x53],
+    F1: [0x3b], F2: [0x3c], F3: [0x3d], F4: [0x3e], F5: [0x3f], F6: [0x40],
+    F7: [0x41], F8: [0x42], F9: [0x43], F10: [0x44], F11: [0x57], F12: [0x58],
+    D: [0x20], E: [0x12], L: [0x26], N: [0x31], Q: [0x10], R: [0x13], T: [0x14], W: [0x11],
+  };
+  static MODIFIERS = ['Ctrl', 'Alt', 'Shift', 'Win'];
+  static release(code) { return code.length == 2 ? [code[0], code[1] | 0x80] : [code[0] | 0x80]; }
+
+  /* Press keys in order and let go in reverse: sendKeys(['Ctrl', 'Alt', 'Delete']).
+     Modifiers held with holdKey stay held. */
+  sendKeys(names) {
+    if (!this.emulator) return;
+    let codes = names.map(n => V86Emulator.SCANCODES[n]), held = this.heldKeys || [];
+    let down = codes.filter((c, i) => !held.includes(names[i]));
+    this.emulator.keyboard_send_scancodes([...down.flat(), ...down.slice().reverse().flatMap(V86Emulator.release)]);
+    // These are the "next key" for any held modifiers (Ctrl and Alt held, then F2)
+    this.releaseHeldKeys();
+  }
+  /* Hold a modifier down (or let go of it, if held) until the next key typed on the
+     real keyboard is let go: holdKey('Ctrl'), holdKey('Alt'), then F2 on the keyboard */
+  holdKey(name) {
+    if (!this.emulator || !V86Emulator.MODIFIERS.includes(name)) return;
+    let held = this.heldKeys ||= [];
+    if (held.includes(name)) {
+      held.splice(held.indexOf(name), 1);
+      this.emulator.keyboard_send_scancodes(V86Emulator.release(V86Emulator.SCANCODES[name]));
+    } else {
+      held.push(name);
+      this.emulator.keyboard_send_scancodes(V86Emulator.SCANCODES[name]);
+    }
+    if (held.length && !this.onHeldKeyUp) {
+      // After v86 has sent that key's release (its own keyup listener is on window too)
+      this.onHeldKeyUp = ev => {
+        if (['Control', 'Alt', 'Shift', 'Meta', 'OS'].includes(ev.key)) return;
+        setTimeout(() => this.releaseHeldKeys(), 0);
+      };
+      addEventListener('keyup', this.onHeldKeyUp);
+    }
+    if (!held.length) this.releaseHeldKeys();
+    this.dispatchEvent(new CustomEvent('heldkeyschange', { detail: held.slice() }));
+  }
+  releaseHeldKeys() {
+    let held = this.heldKeys || [];
+    if (this.emulator && held.length) this.emulator.keyboard_send_scancodes(held.slice().reverse().flatMap(n => V86Emulator.release(V86Emulator.SCANCODES[n])));
+    this.heldKeys = [];
+    if (this.onHeldKeyUp) removeEventListener('keyup', this.onHeldKeyUp);
+    this.onHeldKeyUp = null;
+    if (held.length) this.dispatchEvent(new CustomEvent('heldkeyschange', { detail: [] }));
+  }
+  /* Give the keyboard back to the machine (after a click on a button outside it) */
+  focusScreen() {
+    if (this.term) this.term.focus(); else if (this.canvas) this.canvas.focus();
   }
 
   onV86Started() {
@@ -472,6 +648,7 @@ export class V86Emulator extends BaseEmulator {
     if (this.exited || this.shutDown || !this.emulator) return;
     this.shutDown = true;
     await this.stopPersistence({ final: true });
+    await this.closeFileDisks();
     this.emulator.stop();
     this.onV86Stopped(); // (if v86 hasn't announced the stop already)
   }
@@ -481,7 +658,9 @@ export class V86Emulator extends BaseEmulator {
   disconnectedCallback() {
     super.disconnectedCallback();
     this.destroyed = true;
+    if (this.onHeldKeyUp) removeEventListener('keyup', this.onHeldKeyUp);
     this.stopPersistence();
+    this.closeFileDisks();
     try { this.mouse && this.mouse.destroy(); } catch (e) {}
     try { this.lan && this.lan.close(); } catch (e) {}
     try { this.term && this.term.destroy(); } catch (e) {}
