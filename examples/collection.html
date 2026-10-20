@@ -257,6 +257,91 @@
       dialog.network-dialog {
         width: 760px;
       }
+      /* The files dialog: the drive's tree on the left, the chosen file on the right */
+      dialog.files-dialog {
+        width: min(1400px, 96vw);
+        max-width: 96vw;
+        height: 92vh;
+        max-height: 92vh;
+        box-sizing: border-box;
+        padding: 1em 1.2em;
+        flex-direction: column;
+      }
+      dialog.files-dialog[open] { display: flex; }
+      dialog.files-dialog h3 { margin: 0 2em .2em 0; }
+      dialog.files-dialog > .field-hint { margin: 0 0 .6em; }
+      dialog.files-dialog input[hidden] { display: none; }
+      dialog.files-dialog button.small {
+        background: none;
+        border: 1px solid #444;
+        border-radius: 4px;
+        color: #ddd;
+        padding: .2em .55em;
+        cursor: pointer;
+        font-size: .85em;
+      }
+      dialog.files-dialog button.small:hover { border-color: #49c8d7; color: #49c8d7; }
+      .files-main { flex: 1; display: flex; gap: .8em; min-height: 0; }
+      .files-side { flex: 0 0 32%; min-width: 15em; display: flex; flex-direction: column; min-height: 0; }
+      .files-bar { display: flex; flex-wrap: wrap; gap: .4em; align-items: center; margin-bottom: .4em; }
+      dialog.files-dialog .files-bar input[type="search"] { flex: 1 1 8em; width: auto; margin: 0; }
+      dialog.files-dialog .files-bar label { display: inline-flex; gap: .3em; align-items: center; margin: 0; font-size: .85em; white-space: nowrap; }
+      .files-summary { margin: 0 0 .4em; font-size: .85em; color: #aaa; }
+      .files-tree {
+        flex: 1;
+        overflow: auto;
+        border: 1px solid #333;
+        border-radius: 6px;
+        background: #0b0b0b;
+        font-family: ui-monospace, Consolas, 'DejaVu Sans Mono', monospace;
+        font-size: 12.5px;
+        outline: none;
+        padding: .2em 0;
+      }
+      .files-tree:focus-visible { border-color: #49c8d7; }
+      .ft-row { display: flex; align-items: baseline; gap: .3em; padding: .1em .6em .1em 0; cursor: pointer; white-space: nowrap; }
+      .ft-row:hover { background: #1a1a1a; }
+      .ft-row.ft-selected { background: #1d3a57; }
+      .ft-twisty { flex: none; width: 1em; text-align: center; color: #777; }
+      .ft-name { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+      .ft-dir > .ft-name::after { content: '\\'; color: #555; }
+      .ft-badge { flex: none; font-size: .85em; color: #e8b86b; }
+      .ft-size { flex: none; color: #555; font-size: .9em; }
+      /* The original's files are quiet; what the software changed stands out */
+      .ft-base .ft-name { color: #7c7c7c; }
+      .ft-base.ft-dir .ft-name { color: #a8a8a8; }
+      .ft-changed .ft-name { color: #ffc65c; font-weight: bold; }
+      .ft-base.ft-haschanges .ft-name { color: #ffc65c; }
+      .ft-added .ft-name, .ft-written .ft-name { color: #6fdc6f; font-weight: bold; }
+      .ft-deleted .ft-name { color: #ff6b6b; text-decoration: line-through; font-weight: bold; }
+      .ft-hidden .ft-name { color: #b55; text-decoration: line-through; }
+      .ft-tag { flex: none; font-size: .75em; padding: 0 .4em; border-radius: 3px; text-transform: uppercase; letter-spacing: .03em; }
+      .ft-changed .ft-tag { background: #4a3a10; color: #ffc65c; }
+      .ft-added .ft-tag, .ft-written .ft-tag { background: #173d17; color: #6fdc6f; }
+      .ft-deleted .ft-tag, .ft-hidden .ft-tag { background: #4a1a1a; color: #ff6b6b; }
+      .files-legend { display: flex; flex-wrap: wrap; gap: .3em .9em; font-size: .8em; color: #888; margin-top: .4em; }
+      .files-legend span::before { content: '■ '; }
+      .files-legend .lg-base::before { color: #7c7c7c; }
+      .files-legend .lg-changed::before { color: #ffc65c; }
+      .files-legend .lg-added::before { color: #6fdc6f; }
+      .files-legend .lg-deleted::before { color: #ff6b6b; }
+      dialog.files-dialog details { margin-top: .4em; font-size: .85em; }
+      dialog.files-dialog details pre { max-height: 10em; overflow: auto; background: #0a0a0a; padding: .5em; font-size: .9em; margin: .3em 0 0; }
+      .files-detail { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+      .files-detail-head { display: flex; flex-wrap: wrap; align-items: center; gap: .4em .7em; margin-bottom: .4em; }
+      .files-path { font-family: ui-monospace, Consolas, monospace; font-size: 1.05em; word-break: break-all; }
+      .files-status { font-size: .85em; }
+      .files-actions { display: flex; flex-wrap: wrap; gap: .3em; margin-left: auto; }
+      .files-note { margin: 0 0 .5em; font-size: .85em; color: #aaa; }
+      .files-note:empty { display: none; }
+      .files-empty[hidden] { display: none; }
+      .files-empty { flex: 1; display: flex; align-items: center; justify-content: center; color: #666; text-align: center; padding: 1em; }
+      .files-detail emularity-hex-editor { flex: 1; }
+      @media (max-width: 800px) {
+        dialog.files-dialog { padding: .8em; }
+        .files-main { flex-direction: column; }
+        .files-side { flex: 0 0 38%; min-width: 0; }
+      }
       emularity-collection header {
         position: relative;
       }
@@ -314,6 +399,14 @@
         color: #49c8d7;
         border-bottom-color: #49c8d7;
       }
+      dialog .system-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(10em, 1fr));
+        column-gap: 1em;
+      }
+      dialog .system-grid label { margin: .5em 0; }
+      dialog label.check { display: flex; gap: .5em; align-items: baseline; }
+      dialog label.check .field-hint { display: inline; }
       dialog label {
         display: block;
         margin: .75em 0;
@@ -350,6 +443,17 @@
       dialog .primary:hover {
         background: #12292d;
       }
+      dialog .secondary {
+        background: none;
+        color: #aaa;
+        border: 1px solid #444;
+        border-radius: 6px;
+        padding: .5em 1.25em;
+        font-size: 1em;
+        cursor: pointer;
+        margin: .5em 0 0 .5em;
+      }
+      dialog .secondary:hover { color: #ddd; border-color: #666; }
       dialog .error-note {
         color: #f66;
         font-size: .85em;
@@ -469,18 +573,20 @@
       .player-bar .player-title {
         color: #fff;
         font-weight: bold;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
       }
       .player-bar .pb-timer {
-        position: absolute;
-        left: 50%;
-        top: 50%;
-        transform: translate(-50%, -50%);
+        flex: none;
         color: #aaa;
         font-size: .95em;
         font-variant-numeric: tabular-nums;
         pointer-events: none;
       }
       .player-bar .pb-controls {
+        flex: none;
         margin-left: auto;
         display: flex;
         gap: .4em;
@@ -491,8 +597,53 @@
         font-size: 1em;
         line-height: 1;
       }
-      .player-bar .pb-media-wrap {
+      .player-bar .pb-graphs {
+        align-self: center;
+        margin-right: .9em;
+      }
+      @media (max-width: 1100px) {
+        .player-bar .pb-graphs { display: none; }
+      }
+      .player-bar .pb-lights {
+        margin-right: .6em;
+        font-size: 1.05em;
+      }
+      .player-bar .pb-lights button.al-device {
+        min-width: 0;
+        padding: .2em .3em;
+        margin: 0 -.3em;
+        font-size: 1em;
+        background: none;
+        border-color: transparent;
+      }
+      .player-bar .pb-lights button.al-device:hover, .player-bar .pb-lights button.al-device.al-open {
+        border-color: #555;
+        background: #ffffff10;
+      }
+      .player-bar .pb-media-wrap, .player-bar .pb-keys-wrap {
         position: relative;
+      }
+      .player-bar .pb-media-wrap {
+        display: flex;
+        align-items: center;
+      }
+      .player-bar .pb-media-popup .pbk-grid {
+        display: grid;
+        grid-template-columns: repeat(6, 1fr);
+        gap: .2em;
+        padding: 0 .3em .3em;
+      }
+      .player-bar .pb-media-popup .pbk-grid button {
+        text-align: center;
+        padding: .45em .2em;
+      }
+      .player-bar .pb-media-popup .pbk-mods {
+        grid-template-columns: repeat(4, 1fr);
+      }
+      .player-bar .pb-media-popup .pbk-mods button.active {
+        background: #0c1c1f;
+        color: #49c8d7;
+        outline: 1px solid #49c8d7;
       }
       .player-bar .pb-media-popup {
         position: absolute;
@@ -729,9 +880,9 @@ class ArchiveOrg {
     let res = await fetch('https://archive.org/advancedsearch.php?' + params);
     return (await res.json()).response;
   }
-  static async search(query, page = 1) {
+  static async search(query, page = 1, rows = this.SEARCH_ROWS) {
     let r = await this.advancedSearch(query, ['identifier', 'title', 'year', 'avg_rating'],
-      { 'sort[]': 'downloads desc', rows: this.SEARCH_ROWS, page });
+      { 'sort[]': 'downloads desc', rows, page });
     return { docs: r.docs, total: r.numFound };
   }
   /* Ratings for a batch of identifiers ({ id: rating }). avg_rating is only exposed
@@ -1188,8 +1339,57 @@ class ArchiveOrgSource extends SoftwareSource {
     super();
     this.filter = query;
   }
+  /* What's typed, as queries that find partial words too: { all, title }, or null for
+     nothing typed. archive.org only matches whole words ("simfa" finds nothing;
+     "simfarm" finds SimFarm), and a bare "simfa*" doesn't help either: wildcards only
+     work on a named field. So for `all`, each word becomes
+     (simfa OR title:simfa* OR text:simfa*), and "text:simf" becomes
+     (text:simf OR text:simf*). `title` is the same, but the words must be in the
+     title, so those results can go first. Words with punctuation (x-com, -excluded)
+     aren't widened. Anything with quotes, brackets, wildcards or AND/OR/NOT is left as
+     typed, with no title query. */
+  static query(text) {
+    let words = text.trim().split(/\s+/).filter(Boolean);
+    if (!words.length) return null;
+    if (/["()*?\[\]{}~^\\]/.test(text) || words.some(w => /^(AND|OR|NOT|&&|\|\|)$/.test(w))) return { all: text.trim(), title: null };
+    let plain = /^[\p{L}\p{N}_']+$/u;
+    let terms = words.map(w => {
+      let m = /^([a-z_]+):(.+)$/i.exec(w);
+      if (m) return { all: plain.test(m[2]) ? `(${w} OR ${w}*)` : w };
+      if (w.startsWith('-')) return { all: w };
+      if (!plain.test(w)) return { all: w, title: `title:${w}` };
+      return { all: `(${w} OR title:${w}* OR text:${w}*)`, title: `(title:${w} OR title:${w}*)` };
+    });
+    return {
+      all: terms.map(t => t.all).join(' AND '),
+      title: terms.some(t => t.title) ? terms.map(t => t.title || t.all).join(' AND ') : null,
+    };
+  }
+  /* Results with the words in the title come first (most downloaded first), then the
+     rest. advancedsearch pages but has no offset, so the rest, which start partway
+     through a page, are cut from the one or two pages they span. */
   async search(text, page) {
-    let { docs, total } = await ArchiveOrg.search(this.filter + (text ? ' ' + text : ''), page);
+    let q = ArchiveOrgSource.query(text);
+    if (!q || !q.title) {
+      let { docs, total } = await ArchiveOrg.search(q ? `${this.filter} AND (${q.all})` : this.filter, page);
+      return this.results(docs, total);
+    }
+    let first = `${this.filter} AND (${q.title})`, rest = `${this.filter} AND (${q.all}) AND NOT (${q.title})`;
+    let rows = ArchiveOrg.SEARCH_ROWS, start = (page - 1) * rows;
+    let titled = await ArchiveOrg.search(first, page);
+    let more = await this.slice(rest, Math.max(0, start - titled.total), rows - titled.docs.length);
+    return this.results(titled.docs.concat(more.docs), titled.total + more.total);
+  }
+  /* `count` results of a query from `start` on (count 0 for just the total) */
+  async slice(query, start, count) {
+    let rows = ArchiveOrg.SEARCH_ROWS;
+    if (count <= 0) return { docs: [], total: (await ArchiveOrg.search(query, 1, 0)).total };
+    let a = Math.floor(start / rows) + 1, b = Math.floor((start + count - 1) / rows) + 1;
+    let pages = await Promise.all([a, b].filter((p, i) => !i || p != a).map(p => ArchiveOrg.search(query, p)));
+    let docs = pages.flatMap(p => p.docs).slice(start - (a - 1) * rows, start - (a - 1) * rows + count);
+    return { docs, total: pages[0].total };
+  }
+  results(docs, total) {
     return {
       total,
       results: docs.map(doc => ({
@@ -1301,6 +1501,10 @@ class CollectionItem extends HTMLElement {
   static mediaDrives = null; // { drive: { label, kind } } removable drives titles keep disks for
   static mediaAccept = { floppy: '.img,.ima,.flp,.vfd,.dsk,.zip', cdrom: '.iso,.cue,.bin,.zip' };
 
+  /* Records the collection starts with. Each is added once (by id), so removing one
+     sticks, and ones added in a later version still show up. */
+  static starterRecords() { return []; }
+
   static register(tag) {
     CollectionItem.platforms[this.key] = this;
     customElements.define(tag, this);
@@ -1348,6 +1552,11 @@ class CollectionItem extends HTMLElement {
     return r.installed ? '🖴 Installed to disk' : r.cloned ? '💾 On disk' : r.cached ? '📥 Cached on device' : '';
   }
   canInstall() { return false; }
+  /* The card's line under the title */
+  get detail() {
+    let r = this.record;
+    return r.source == 'upload' ? r.filename + ' (uploaded)' : r.filename;
+  }
 
   /* ----- Disks -----
      A title's set of floppies and CDs (record.media: [{ id, name, drive, url | upload,
@@ -1607,7 +1816,7 @@ class CollectionItem extends HTMLElement {
       }
     }
     this.querySelector('.game-title').textContent = r.title;
-    let detail = r.source == 'upload' ? r.filename + ' (uploaded)' : r.filename;
+    let detail = this.detail;
     let size = Format.bytes(r.size);
     this.querySelector('.game-detail').textContent = size ? detail + ' · ' + size : detail;
     this.querySelector('.game-lastplayed').textContent = r.lastPlayed ? 'Played ' + Format.relativeTime(r.lastPlayed) : 'Never played';
@@ -1662,6 +1871,15 @@ class CollectionItem extends HTMLElement {
       pending = { loaded, total };
       if (!scheduled) { scheduled = true; requestAnimationFrame(flush); }
     };
+  }
+
+  /* A short message on the card, in place of the storage badge, for a few seconds */
+  notice(text) {
+    let status = this.querySelector('.game-storage');
+    if (!status) return;
+    status.textContent = text;
+    clearTimeout(this.noticeTimer);
+    this.noticeTimer = setTimeout(() => this.render(), 6000);
   }
 
   /* ----- Software data ----- */
@@ -1831,6 +2049,43 @@ class DosItem extends CollectionItem {
   // "Install to disk" extracts the zip into a working folder, so it only applies to
   // zip-based titles; raw disk images stay on Clone/Cache.
   canInstall() { return /\.zip$/i.test(this.record.filename || ''); }
+
+  /* Its drive's files can be looked at and changed, through what it has saved (only
+     while not installed: an installed title's files are real ones in its folder) */
+  menuActions() {
+    let actions = super.menuActions();
+    if (!this.record.installed && /\.zip$/i.test(this.record.filename || '')) {
+      let reset = actions.find(a => a[0] == 'menu-reset');
+      actions.splice(actions.indexOf(reset), 0, ['menu-files', '🗂 Files…', () => this.emit('itemfiles')]);
+    }
+    return actions;
+  }
+  /* The original zip's files, as path ('/c/...') -> size. Uses a local copy, or downloads
+     it if `download` is set (otherwise returns null without one). */
+  async originalFiles(download = false, onProgress) {
+    if (this.originalListing) return this.originalListing;
+    let blob = await this.localCopy();
+    if (!blob && download && this.record.url) blob = await LocalStore.fetchBlob(this.record.url, onProgress);
+    if (!blob) return null;
+    const Buffer = BrowserFS.BFSRequire('buffer').Buffer;
+    let zip = new BrowserFS.FileSystem.ZipFS(Buffer.from(await blob.arrayBuffer()));
+    let files = new Map();
+    let walk = (dir, under) => {
+      for (let name of zip.readdirSync(dir)) {
+        let full = (dir == '/' ? '' : dir) + '/' + name, st = zip.statSync(full, false);
+        files.set(under + full, st.isDirectory() ? -1 : st.size);
+        if (st.isDirectory()) walk(full, under);
+      }
+    };
+    walk('/', '/c');
+    this.originalZip = zip;
+    return this.originalListing = files;
+  }
+  /* One of the original's files ('/c/...'), once originalFiles() has loaded them */
+  originalRead(path) {
+    BrowserFS.initialize(this.originalZip);
+    return new Uint8Array(BrowserFS.BFSRequire('fs').readFileSync(path.replace(/^\/c/, '')));
+  }
 
   /* Convert an archive.org-style start path ('GAMEDIR/GAME.EXE') into autoexec commands */
   get autoexec() {
@@ -2030,6 +2285,116 @@ class X86Item extends CollectionItem {
     cdrom: { label: 'CD-ROM', kind: 'cdrom' },
   };
 
+  /* ----- Systems -----
+     A PC put together in the add dialog rather than booted from an image (record.source
+     'system'): blank hard disks (record.hardDisks: { hda: { size }, hdb: { size } }),
+     kept as files in the browser's private file system (see file-disk.js) and saved as
+     they're written, plus its hardware (cpu, memory, vgaMemory, netCard, acpi,
+     bootOrder). Floppies and CDs come from its disks, as for any title. */
+  static newSystem = true;
+  static HARD_DISK_SIZES = [512, 1024, 2048, 4096, 8192, 16384, 32768].map(mb => mb * 1048576);
+  static MEMORY_SIZES = [16, 32, 64, 128, 256, 512, 1024, 2048, 3072, 4096, 8192];
+  /* The CPU picks the emulator build: v86 (32-bit, upstream), or the v86_64 fork, which
+     adds 64-bit long mode and runs 32-bit guests too. maxMemory is in MB; v86_64 above
+     3 GB needs the browser's 64-bit wasm memory (not Safari). */
+  static CPUS = {
+    i686: { label: '32-bit (i686, v86)', root: '../emulators/v86', maxMemory: 1024 },
+    x86_64: { label: '64-bit (x86-64, v86_64, experimental)', root: '../emulators/v86_64', maxMemory: 8192 },
+  };
+  static memorySizes(cpu) {
+    let max = (this.CPUS[cpu] || this.CPUS.i686).maxMemory;
+    return this.MEMORY_SIZES.filter(mb => mb <= max).map(mb => [mb, mb < 1024 ? mb + ' MB' : mb / 1024 + ' GB']);
+  }
+  /* Refill a memory <select> for the CPU chosen, keeping its value where that's allowed */
+  static cpuChanged(cpuSelect, memorySelect) {
+    let memory = +memorySelect.value, sizes = this.memorySizes(cpuSelect.value);
+    memorySelect.replaceChildren(...sizes.map(([mb, label]) => new Option(label, mb)));
+    memorySelect.value = Math.min(memory, sizes[sizes.length - 1][0]);
+  }
+  static VGA_MEMORY_SIZES = [2, 4, 8, 16, 32];
+  static NET_CARDS = { ne2k: 'NE2000 (DOS, Windows 9x, Linux)', virtio: 'virtio (Linux)', none: 'None' };
+  /* Which drive the BIOS tries first (record.bootOrder), as SeaBIOS's priority nibbles
+     (1 floppy, 2 hard disk, 3 CD-ROM; the lowest nibble goes first). A drive with
+     nothing bootable in it is skipped, so "hard disk first" still starts an installer
+     CD while the disk is blank. */
+  static BOOT_ORDERS = {
+    '': ['Automatic (usually CD-ROM first)'],
+    hd: ['Hard disk, then CD-ROM', 0x132],
+    cd: ['CD-ROM, then hard disk', 0x123],
+    floppy: ['Floppy, then hard disk', 0x321],
+  };
+  /* A system's record, from the add dialog's choices */
+  static systemRecord({ title, cpu, hda, hdb, memory, vgaMemory, netCard, acpi, network }) {
+    // Whole cylinders (16 heads x 63 sectors), as the BIOS sees disks
+    let round = size => Math.ceil(size / 516096) * 516096;
+    let hardDisks = { hda: { size: round(hda) } };
+    if (hdb) hardDisks.hdb = { size: round(hdb) };
+    return { title, source: 'system', filename: '', hardDisks, cpu: cpu == 'i686' ? undefined : cpu, memory, vgaMemory, netCard, acpi: acpi || undefined,
+      network: network || undefined };
+  }
+  get isSystem() { return this.record.source == 'system'; }
+  /* Where a system's hard disk is kept */
+  diskPath(drive) { return `emularity/disks/${this.record.id}/${drive}.img`; }
+  get detail() {
+    let r = this.record;
+    if (!this.isSystem) return super.detail;
+    let disks = Object.values(r.hardDisks || {}).map(d => Format.bytes(d.size)).join(' + ');
+    return `${r.memory} MB RAM · ${disks} hard disk${r.hardDisks && r.hardDisks.hdb ? 's' : ''}`;
+  }
+  menuActions() {
+    let actions = super.menuActions();
+    if (!this.isSystem) return actions;
+    let reset = actions.find(a => a[0] == 'menu-reset');
+    if (reset) reset[1] = '⟲ Erase hard disks…';
+    actions.splice(actions.indexOf(reset), 0, ['menu-export', '⇩ Export hard disk…', () => this.exportHardDisk('hda')]);
+    return actions;
+  }
+  /* Save a hard disk as a raw image file, for other emulators (or a real disk) */
+  async exportHardDisk(drive) {
+    let { exportDisk } = await import('../src/emulators/file-disk.js');
+    let name = (this.record.title.replace(/[^\w.-]+/g, '-').replace(/^-+|-+$/g, '') || 'pc') + (drive == 'hda' ? '' : '-' + drive) + '.img';
+    let size = this.record.hardDisks[drive].size, saved;
+    try { saved = await exportDisk(this.diskPath(drive), size, name, this.progress('Exporting hard disk')); }
+    catch (e) { console.error(e); this.render(); alert('Failed to export the hard disk: ' + e.message); return; }
+    this.render();
+    if (saved) this.notice(`Saved ${name} (${Format.bytes(size)})`);
+  }
+  async resetSaves() {
+    if (!this.isSystem) return super.resetSaves();
+    if (!confirm(`Erase the hard disks of "${this.record.title}"? Everything on them is permanently deleted, and it starts again with blank disks.`)) return;
+    try {
+      let { removeDisk } = await import('../src/emulators/file-disk.js');
+      await removeDisk(`emularity/disks/${this.record.id}`);
+      await new Promise((resolve, reject) => {
+        let req = indexedDB.deleteDatabase(this.persistStore); // floppy changes
+        req.onsuccess = req.onblocked = resolve;
+        req.onerror = () => reject(req.error);
+      });
+    } catch (e) {
+      alert('Failed to erase the hard disks: ' + e.message);
+    }
+  }
+  async deleteStoredData() {
+    await super.deleteStoredData();
+    if (!this.isSystem) return;
+    let { removeDisk } = await import('../src/emulators/file-disk.js');
+    try { await removeDisk(`emularity/disks/${this.record.id}`); } catch (e) { console.error(e); }
+  }
+  /* Copy another system's hard disks onto this one's */
+  async copyHardDisksFrom(other) {
+    let { copyDisk } = await import('../src/emulators/file-disk.js');
+    for (let drive in this.record.hardDisks || {}) {
+      await copyDisk(other.diskPath(drive), this.diskPath(drive), this.progress('Copying hard disk ' + (drive == 'hda' ? 1 : 2)));
+    }
+    this.render();
+  }
+  /* How much of each hard disk is in use: { hda: bytes, ... } */
+  async hardDiskUsage() {
+    let { diskUsage } = await import('../src/emulators/file-disk.js'), used = {};
+    for (let drive in this.record.hardDisks || {}) used[drive] = await diskUsage(this.diskPath(drive));
+    return used;
+  }
+
   /* Starter content: two bundled demos, a graphical TinyCore desktop and a tiny
      serial-console Linux shell */
   static starterRecords() {
@@ -2118,7 +2483,8 @@ class X86Item extends CollectionItem {
 
   async createEmulator() {
     let r = this.record;
-    let emu = await this.newEmulator('emularity-x86', '../emulators/v86');
+    let cpu = this.isSystem && X86Item.CPUS[r.cpu] || X86Item.CPUS.i686;
+    let emu = await this.newEmulator('emularity-x86', cpu.root);
     if (r.memory) emu.setAttribute('memory', String(r.memory));
     if (r.console) emu.setAttribute('console', r.console); // 'serial' for serial-only images
     if (r.captureMouse) emu.setAttribute('capturemouse', '');
@@ -2131,7 +2497,13 @@ class X86Item extends CollectionItem {
     }
     emu.imagename = r.filename || '';
     emu.media = await this.bootMedia();
-    if (r.disk) {
+    if (this.isSystem) {
+      emu.hardDisks = Object.fromEntries(Object.entries(r.hardDisks).map(([drive, d]) => [drive, { path: this.diskPath(drive), size: d.size }]));
+      if (r.vgaMemory) emu.setAttribute('vgamemory', String(r.vgaMemory));
+      emu.v86opts = { acpi: !!r.acpi, net_device: { type: r.netCard || 'ne2k' } };
+      let boot = X86Item.BOOT_ORDERS[r.bootOrder || ''];
+      if (boot && boot[1]) emu.v86opts.boot_order = boot[1];
+    } else if (r.disk) {
       // A hard disk built bigger than the original (see buildDisk)
       emu.v86opts = { ...(r.v86opts || {}), hda: { buffer: await this.hardDiskFile(), async: true } };
     } else if (r.v86opts) {
@@ -2161,6 +2533,26 @@ class NesItem extends CollectionItem {
   static onscreenKeyboard = false; // a game pad: arrows, Z/X, Enter, Shift, or a gamepad
   static cores = { mesen: 'Mesen (most accurate)', fceumm: 'FCEUmm (fastest)' };
 
+  /* Homebrew games that may be passed around freely (see games/nes/README.md) */
+  static starterRecords() {
+    let games = [
+      ['kim-and-james', 'Kim & James'],
+      ['super-tilt-bro', 'Super Tilt Bro.'],
+      ['nova-the-squirrel', 'Nova the Squirrel'],
+      ['double-action-blaster-guys', 'Double Action Blaster Guys'],
+      ['thwaite', 'Thwaite'],
+      ['rhde', 'RHDE: Furniture Fight'],
+      ['concentration-room', 'Concentration Room'],
+      ['robotfindskitten', 'robotfindskitten'],
+    ];
+    let now = Date.now();
+    return games.map(([name, title], i) => ({
+      id: 'starter-nes-' + name, platform: 'nes', title, source: 'url',
+      url: 'games/nes/' + name + '.nes', filename: name + '.nes', thumb: 'games/nes/' + name + '.png',
+      added: now - i, // listed in this order, newest first
+    }));
+  }
+
   async createEmulator() {
     let r = this.record;
     let emu = await this.newEmulator('emularity-libretro', '../emulators/libretro');
@@ -2186,7 +2578,7 @@ class EditDialog extends HTMLElement {
     this.innerHTML = `
       <dialog class="edit-dialog">
         <button class="close-dialog" title="Close">✕</button>
-        <h3>Edit software</h3>
+        <h3 class="edit-heading">Edit software</h3>
         <label>Title <input type="text" name="edit-title"></label>
         <label class="edit-exe-field">Program to run <input type="text" name="edit-exe" placeholder="GAMEDIR/GAME.EXE"></label>
         <label class="edit-url-field">URL <input type="url" name="edit-url"></label>
@@ -2195,6 +2587,19 @@ class EditDialog extends HTMLElement {
         <label class="edit-capture-field"><input type="checkbox" name="edit-capture"> Capture the mouse when the screen is clicked (Esc releases it)</label>
         <label class="edit-network-field"><input type="checkbox" name="edit-network"> Connect to the local network (shared by every machine running in this browser)</label>
         <label class="edit-network-field">Host name on the network <input type="text" name="edit-hostname"></label>
+        <fieldset class="edit-system-field">
+          <legend>Hardware</legend>
+          <div class="system-grid">
+            <label>CPU <select name="edit-cpu"></select></label>
+            <label>Memory <select name="edit-memory"></select></label>
+            <label>Video memory <select name="edit-vga"></select></label>
+            <label>Network card <select name="edit-net"></select></label>
+            <label>Boot from <select name="edit-boot"></select></label>
+          </div>
+          <label class="check"><input type="checkbox" name="edit-acpi"> ACPI power management <span class="field-hint">(leave off for Windows 9x)</span></label>
+          <div class="hard-disk-list"></div>
+          <p class="field-hint">Hardware changes take effect the next time it starts.</p>
+        </fieldset>
         <fieldset class="edit-media-field">
           <legend>Disks</legend>
           <div class="disk-list"></div>
@@ -2267,6 +2672,50 @@ class EditDialog extends HTMLElement {
     }));
     if (!item.disks.length) list.innerHTML = '<p class="field-hint">No disks yet.</p>';
   }
+  /* A system's hard disks: size and use, export; a second one can be added or removed */
+  async renderHardDisks() {
+    let item = this.item, list = this.querySelector('.hard-disk-list');
+    let disks = item.record.hardDisks || {}, used = await item.hardDiskUsage().catch(() => ({}));
+    if (item != this.item) return;
+    let rows = Object.entries(disks).map(([drive, d]) => {
+      let row = document.createElement('div');
+      row.className = 'disk-row';
+      row.innerHTML = `<span class="hard-disk-name"></span> <button class="hard-disk-export">⇩ Export…</button>`;
+      row.querySelector('.hard-disk-name').textContent = `Hard disk ${drive == 'hda' ? 1 : 2}: ${Format.bytes(d.size)}` +
+        (used[drive] ? ` (${Format.bytes(used[drive])} stored)` : ' (blank)');
+      row.querySelector('.hard-disk-export').addEventListener('click', () => item.exportHardDisk(drive));
+      if (drive == 'hdb') {
+        let remove = document.createElement('button');
+        remove.textContent = '✕ Remove';
+        remove.title = 'Remove this hard disk, and everything on it';
+        remove.addEventListener('click', async () => {
+          if (!confirm('Remove hard disk 2? Everything on it is permanently deleted.')) return;
+          let { removeDisk } = await import('../src/emulators/file-disk.js');
+          await removeDisk(item.diskPath('hdb'));
+          let { hdb, ...rest } = item.record.hardDisks;
+          item.update({ hardDisks: rest });
+          this.renderHardDisks();
+        });
+        row.appendChild(remove);
+      }
+      return row;
+    });
+    if (!disks.hdb) {
+      let row = document.createElement('div');
+      row.className = 'disk-row';
+      row.innerHTML = `<select class="hard-disk-size" title="Size"></select> <button class="hard-disk-add">＋ Add hard disk 2</button>`;
+      let size = row.querySelector('select');
+      size.replaceChildren(...item.constructor.HARD_DISK_SIZES.map(n => new Option(Format.bytes(n), n)));
+      size.value = 2048 * 1048576;
+      row.querySelector('button').addEventListener('click', () => {
+        let { hdb } = item.constructor.systemRecord({ hda: 0, hdb: +size.value }).hardDisks;
+        item.update({ hardDisks: { ...disks, hdb } });
+        this.renderHardDisks();
+      });
+      rows.push(row);
+    }
+    list.replaceChildren(...rows);
+  }
   field(name) { return this.querySelector(`[name="${name}"]`); }
   open(item) {
     let r = item.record;
@@ -2290,6 +2739,22 @@ class EditDialog extends HTMLElement {
     this.querySelector('.edit-capture-field').style.display = item.constructor.captureMouseField ? '' : 'none';
     this.querySelectorAll('.edit-network-field').forEach(el => { el.style.display = item.constructor.networkField ? '' : 'none'; });
     this.querySelector('.edit-url-field').style.display = r.source == 'url' ? '' : 'none';
+    this.querySelector('.edit-heading').textContent = item.isSystem ? 'Edit system' : 'Edit software';
+    this.querySelector('.edit-system-field').style.display = item.isSystem ? '' : 'none';
+    if (item.isSystem) {
+      let p = item.constructor, select = (name, options, value) => {
+        this.field(name).replaceChildren(...options.map(([v, label]) => new Option(label, v)));
+        this.field(name).value = value;
+      };
+      select('edit-cpu', Object.entries(p.CPUS).map(([k, c]) => [k, c.label]), r.cpu || 'i686');
+      this.field('edit-cpu').onchange = () => p.cpuChanged(this.field('edit-cpu'), this.field('edit-memory'));
+      select('edit-memory', p.memorySizes(r.cpu), r.memory);
+      select('edit-vga', p.VGA_MEMORY_SIZES.map(mb => [mb, mb + ' MB']), r.vgaMemory || 8);
+      select('edit-net', Object.entries(p.NET_CARDS), r.netCard || 'ne2k');
+      select('edit-boot', Object.entries(p.BOOT_ORDERS).map(([k, [label]]) => [k, label]), r.bootOrder || '');
+      this.field('edit-acpi').checked = !!r.acpi;
+      this.renderHardDisks();
+    }
     let drives = item.constructor.mediaDrives;
     this.querySelector('.edit-media-field').style.display = drives ? '' : 'none';
     if (drives) {
@@ -2309,6 +2774,14 @@ class EditDialog extends HTMLElement {
     if (r.source == 'url') fields.url = this.field('edit-url').value.trim() || r.url;
     if (this.item.constructor.captureMouseField) fields.captureMouse = this.field('edit-capture').checked || undefined;
     if (this.item.constructor.cores) fields.core = this.field('edit-core').value;
+    if (this.item.isSystem) {
+      fields.cpu = this.field('edit-cpu').value == 'i686' ? undefined : this.field('edit-cpu').value;
+      fields.memory = +this.field('edit-memory').value;
+      fields.vgaMemory = +this.field('edit-vga').value;
+      fields.netCard = this.field('edit-net').value;
+      fields.bootOrder = this.field('edit-boot').value || undefined;
+      fields.acpi = this.field('edit-acpi').checked || undefined;
+    }
     if (this.item.constructor.networkField) {
       fields.network = this.field('edit-network').checked ? 'lan' : undefined;
       fields.hostname = this.field('edit-hostname').value.trim() || undefined;
@@ -2335,6 +2808,7 @@ class InstanceDialog extends HTMLElement {
         <label>Title <input type="text" name="instance-title"></label>
         <label class="instance-disk-field">Hard disk size <select name="instance-disk"></select></label>
         <p class="field-hint instance-disk-hint">A bigger disk is built by copying the original's files onto it, which reads the whole original once. Only the space that gets used is stored.</p>
+        <label class="check instance-copy-field"><input type="checkbox" name="instance-copy" checked> Copy its hard disks as they are now (otherwise the new one's start blank)</label>
         <button class="primary instance-create">Create</button>
       </dialog>`;
     this.dialog = this.querySelector('dialog');
@@ -2346,6 +2820,8 @@ class InstanceDialog extends HTMLElement {
     this.querySelector('.instance-of').textContent = item.record.title;
     let title = this.querySelector('[name="instance-title"]');
     title.value = this.collection.instanceTitle(item);
+    this.querySelector('.instance-copy-field').style.display = item.isSystem ? '' : 'none';
+    this.querySelector('.instance-of').nextSibling.textContent = item.isSystem ? ', with the same hardware and disks, and its own saved changes.' : ' as it was originally, with its own saved changes.';
     let resizable = !!item.canResizeDisk;
     for (let el of this.querySelectorAll('.instance-disk-field, .instance-disk-hint')) el.style.display = resizable ? '' : 'none';
     if (resizable) {
@@ -2366,10 +2842,527 @@ class InstanceDialog extends HTMLElement {
     let title = this.querySelector('[name="instance-title"]').value.trim();
     let diskSize = this.item.canResizeDisk ? +this.querySelector('[name="instance-disk"]').value || 0 : 0;
     this.dialog.close();
-    this.collection.newInstance(this.item, { title, diskSize });
+    let copyDisks = this.item.isSystem && this.querySelector('[name="instance-copy"]').checked;
+    this.collection.newInstance(this.item, { title, diskSize, copyDisks });
   }
 }
 customElements.define('emularity-instance-dialog', InstanceDialog);
+
+/* A title's saved changes, as kept in its persist store: the writable layer of the
+   BrowserFS OverlayFS its drives run on, in IndexedDB. Files it wrote are stored whole
+   (at '/c/...' for drive C:); files it deleted from the original are listed in
+   /.deletedFiles.log, a line "d/c/PATH" each, the last line for a path deciding it.
+   Only for when the title isn't running: a running one holds its own copy of all this
+   and writes it back over any changes. */
+class OverlayStore {
+  static LOG = '/.deletedFiles.log';
+
+  static async open(name) {
+    let store = await new Promise(resolve => {
+      let fs = new BrowserFS.FileSystem.IndexedDB(err => resolve(err ? null : fs), name);
+    });
+    if (!store) throw new Error("the saved data couldn't be opened");
+    return new OverlayStore(store);
+  }
+  constructor(store) {
+    this.store = store;
+  }
+  /* A node-style fs call on this store (BrowserFS's fs module is shared, so it's
+     pointed back here for each call) */
+  call(method, ...args) {
+    BrowserFS.initialize(this.store);
+    let fs = BrowserFS.BFSRequire('fs');
+    return new Promise((resolve, reject) => fs[method](...args, (e, r) => e ? reject(e) : resolve(r)));
+  }
+  /* Every file and folder written, as [{ path, size, mtime, dir }] (not the deletion log) */
+  async files() {
+    let out = [];
+    let walk = async dir => {
+      for (let name of await this.call('readdir', dir).catch(() => [])) {
+        let full = (dir == '/' ? '' : dir) + '/' + name;
+        let st = await this.call('stat', full).catch(() => null);
+        if (!st) continue;
+        if (st.isDirectory()) { out.push({ path: full, dir: true }); await walk(full); }
+        else if (full != OverlayStore.LOG) out.push({ path: full, size: st.size, mtime: st.mtime });
+      }
+    };
+    await walk('/');
+    return out;
+  }
+  async log() {
+    try { return (await this.call('readFile', OverlayStore.LOG)).toString('utf8'); }
+    catch (e) { return ''; }
+  }
+  /* The paths the log has as deleted */
+  static deleted(log) {
+    let state = new Map();
+    for (let line of log.split('\n')) if (line) state.set(line.slice(1), line[0] == 'd');
+    return [...state].filter(([, d]) => d).map(([p]) => p);
+  }
+  /* Rewrite the log without these paths */
+  async undelete(paths) {
+    let drop = new Set(paths);
+    let log = (await this.log()).split('\n').filter(line => line && !drop.has(line.slice(1)));
+    if (log.length) await this.call('writeFile', OverlayStore.LOG, log.join('\n') + '\n');
+    else await this.call('unlink', OverlayStore.LOG).catch(() => {});
+  }
+  /* Mark one of the original's files deleted, as OverlayFS does */
+  async deletePath(path) {
+    await this.call('writeFile', OverlayStore.LOG, (await this.log()) + 'd' + path + '\n');
+  }
+  async read(path) {
+    return new Uint8Array(await this.call('readFile', path));
+  }
+  async write(path, bytes) {
+    let parts = path.split('/').slice(1, -1), dir = '';
+    for (let part of parts) {
+      dir += '/' + part;
+      await this.call('mkdir', dir).catch(e => { if (e.code != 'EEXIST') throw e; });
+    }
+    const Buffer = BrowserFS.BFSRequire('buffer').Buffer;
+    await this.call('writeFile', path, Buffer.from(bytes));
+  }
+  async remove(path) {
+    await this.call('unlink', path);
+  }
+  close() {
+    try { this.store.store.db.close(); } catch (e) {}
+  }
+}
+
+/* A title's drive C: as the software sees it: the original's files with what it has
+   saved over them (see OverlayStore), as a tree, and any file in a hex editor.
+   open(item) shows it for a DosItem.
+
+   Each file in the tree is one of:
+     base     the original's, untouched (drawn quietly)
+     changed  the original's, saved over
+     added    not in the original
+     written  saved, when the original's files aren't loaded to tell which of the two
+     deleted  deleted by the software: it can't see it (struck through)
+     hidden   in a deleted folder, so it can't see it either */
+class FilesDialog extends HTMLElement {
+  static STATUS = {
+    base: 'Original', changed: 'Changed', added: 'Added', written: 'Saved',
+    deleted: 'Deleted', hidden: 'Deleted with its folder',
+  };
+
+  connectedCallback() {
+    if (this.dialog) return;
+    this.innerHTML = `
+      <dialog class="files-dialog">
+        <button class="close-dialog" title="Close">✕</button>
+        <h3>Files: <span class="files-title"></span></h3>
+        <p class="field-hint">Drive C: as the software sees it. Make changes only while it isn't running, in this tab or any other: they take effect the next time it starts.</p>
+        <div class="files-main">
+          <div class="files-side">
+            <div class="files-bar">
+              <input type="search" class="files-filter" placeholder="Filter by name">
+              <label><input type="checkbox" class="files-changes-only"> Changes only</label>
+            </div>
+            <div class="files-bar">
+              <button class="small files-retry" hidden>Try again</button>
+              <button class="small files-add">Add a file…</button>
+            </div>
+            <p class="files-summary"></p>
+            <div class="files-tree" tabindex="0"></div>
+            <div class="files-legend"><span class="lg-base">original</span><span class="lg-changed">changed</span><span class="lg-added">added</span><span class="lg-deleted">deleted</span></div>
+            <details><summary>Deletion log</summary><pre class="files-log"></pre></details>
+          </div>
+          <div class="files-detail">
+            <div class="files-detail-head" hidden>
+              <span class="files-path"></span>
+              <span class="files-status"></span>
+              <span class="files-actions"></span>
+            </div>
+            <p class="files-note"></p>
+            <div class="files-empty">Choose a file to see what's in it.</div>
+            <emularity-hex-editor hidden></emularity-hex-editor>
+          </div>
+        </div>
+        <input type="file" class="files-upload" hidden>
+      </dialog>`;
+    let $ = sel => this.querySelector(sel);
+    this.dialog = $('dialog');
+    this.tree = $('.files-tree');
+    this.editor = $('emularity-hex-editor');
+    $('.close-dialog').addEventListener('click', () => { if (this.mayLeave()) this.dialog.close(); });
+    this.dialog.addEventListener('cancel', ev => { if (!this.mayLeave()) ev.preventDefault(); });
+    this.dialog.addEventListener('close', () => { if (this.store) this.store.close(); this.store = null; });
+    $('.files-filter').addEventListener('input', () => this.renderTree());
+    $('.files-changes-only').addEventListener('change', () => this.renderTree());
+    $('.files-retry').addEventListener('click', () => this.loadOriginal());
+    $('.files-add').addEventListener('click', () => this.addFile());
+    $('.files-upload').addEventListener('change', ev => this.onUpload(ev));
+    this.tree.addEventListener('click', ev => {
+      let row = ev.target.closest('.ft-row');
+      if (!row) return;
+      let node = this.nodes.get(row.dataset.path);
+      this.select(node);
+      if (node.dir && node.path != '/c') this.toggle(node);
+    });
+    this.tree.addEventListener('keydown', ev => this.onTreeKey(ev));
+  }
+  /* 'GAME\SAVE.DAT' or 'C:\GAME\SAVE.DAT' -> '/c/GAME/SAVE.DAT', and back */
+  static toPath(dos) { return '/c/' + dos.replace(/^[a-z]:/i, '').replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+$/, ''); }
+  static toDos(path) { return 'C:' + (path.replace(/^\/c/, '').replace(/\//g, '\\') || '\\'); }
+
+  /* Unsaved changes in the editor would be lost: ask first */
+  mayLeave() {
+    return !this.editor.modified || confirm(`Throw away the unsaved changes to ${FilesDialog.toDos(this.editing.path)}?`);
+  }
+  async open(item) {
+    await import('../src/ui/hex-editor.js');
+    this.item = item;
+    this.original = null;
+    this.selected = this.editing = null;
+    this.expanded = new Set(['/c']);
+    this.opened = false;
+    this.querySelector('.files-title').textContent = item.record.title;
+    this.tree.replaceChildren();
+    this.showDetail(null);
+    this.querySelector('.files-summary').textContent = 'Reading saved data…';
+    this.dialog.showModal();
+    try {
+      this.store = await OverlayStore.open(item.persistStore);
+      await this.loadOriginal();
+    } catch (e) {
+      console.error(e);
+      this.querySelector('.files-summary').textContent = 'Failed to read the saved data: ' + e.message;
+    }
+  }
+  /* The original's files (from wherever it boots from: a local copy, or downloaded),
+     then the tree. If they can't be had, the tree shows just the changes. */
+  async loadOriginal() {
+    let summary = this.querySelector('.files-summary'), retry = this.querySelector('.files-retry');
+    retry.hidden = true;
+    summary.textContent = 'Loading the files…';
+    let error = null;
+    try {
+      this.original = await this.item.originalFiles(true, (loaded, total) => {
+        summary.textContent = 'Downloading the files… ' + (total ? Math.round(loaded / total * 100) + '%' : Format.bytes(loaded));
+      });
+    } catch (e) {
+      console.error(e);
+      error = e;
+    }
+    await this.refresh();
+    if (!this.original) {
+      summary.textContent = `Couldn't load the original files${error ? ' (' + error.message + ')' : ''}, so only what was saved over them is listed.`;
+      retry.hidden = false;
+    }
+  }
+
+  /* ----- The tree ----- */
+
+  /* Read the store again and rebuild the tree (keeping what's open and chosen) */
+  async refresh() {
+    let written = await this.store.files(), log = await this.store.log();
+    let deleted = new Set(OverlayStore.deleted(log)), orig = this.original;
+    let nodes = this.nodes = new Map();
+    let node = path => {
+      let n = nodes.get(path);
+      if (n) return n;
+      n = { path, name: path.split('/').pop(), children: [], deleted: deleted.has(path) };
+      nodes.set(path, n);
+      if (path != '/c') {
+        n.parent = node(path.slice(0, path.lastIndexOf('/')));
+        n.parent.children.push(n);
+        n.parent.dir = true;
+      }
+      return n;
+    };
+    let root = node('/c');
+    root.dir = true;
+    if (orig) for (let [p, size] of orig) {
+      let n = node(p);
+      n.base = size < 0 ? 0 : size;
+      if (size < 0) n.dir = true;
+    }
+    // Drive C: only (the emulator keeps its own dosbox.conf beside it)
+    for (let f of written) {
+      if (!f.path.startsWith('/c/')) continue;
+      let n = node(f.path);
+      n.written = f.dir ? 0 : f.size;
+      if (f.dir) n.dir = true;
+    }
+    for (let p of deleted) if (p.startsWith('/c/')) node(p);
+    // What each one is. A deleted folder hides the original's files in it, unless the
+    // folder was made again, as OverlayFS lists them.
+    let mark = (n, hiddenAbove) => {
+      let gone = n.written === undefined && (n.deleted || hiddenAbove);
+      if (n.written !== undefined) n.status = n.base !== undefined ? (n.dir ? 'base' : 'changed') : orig ? 'added' : n.dir ? 'base' : 'written';
+      else n.status = gone ? (n.deleted ? 'deleted' : 'hidden') : 'base';
+      n.children.sort((a, b) => (b.dir ? 1 : 0) - (a.dir ? 1 : 0) || a.name.localeCompare(b.name));
+      n.changes = 0;
+      for (let c of n.children) n.changes += mark(c, gone);
+      // (Files hidden by a deleted folder count as the folder's one change)
+      return n.changes + (!n.dir && n.status != 'base' && n.status != 'hidden' ? 1 : 0) + (n.dir && n.status == 'deleted' ? 1 : 0);
+    };
+    mark(root, false);
+    // Open the folders that have changes in them, the first time
+    if (!this.opened) {
+      this.opened = true;
+      for (let n of nodes.values()) if (n.dir && n.changes && n.status != 'deleted' && n.status != 'hidden') this.expanded.add(n.path);
+    }
+    let count = s => [...nodes.values()].filter(n => !n.dir && n.status == s).length;
+    let deletedDirs = [...nodes.values()].filter(n => n.dir && n.status == 'deleted').length;
+    let parts = orig
+      ? [count('changed') + ' changed', count('added') + ' added', (count('deleted') + deletedDirs) + ' deleted', count('base') + ' untouched']
+      : [count('written') + ' saved', (count('deleted') + deletedDirs) + ' deleted'];
+    this.querySelector('.files-summary').textContent = parts.join(' · ');
+    this.querySelector('.files-log').textContent = log || '(empty)';
+    if (this.selected) this.selected = nodes.get(this.selected.path) || null;
+    if (this.editing) this.editing = nodes.get(this.editing.path) || this.editing;
+    this.renderTree();
+    if (this.selected) this.showDetail(this.selected, false);
+  }
+  toggle(node) {
+    if (this.expanded.has(node.path)) this.expanded.delete(node.path); else this.expanded.add(node.path);
+    this.renderTree();
+  }
+  /* The rows to show, in order: what's open, or what the filter lets through (and the
+     folders above it, opened) */
+  visibleNodes() {
+    let filter = this.querySelector('.files-filter').value.trim().toLowerCase();
+    let changesOnly = this.querySelector('.files-changes-only').checked;
+    let filtering = filter || changesOnly;
+    let passes = n => (!filter || n.name.toLowerCase().includes(filter)) && (!changesOnly || n.status != 'base');
+    let keep = new Set();
+    if (filtering) {
+      for (let n of this.nodes.values()) {
+        if (n.path == '/c' || !passes(n)) continue;
+        for (let a = n; a; a = a.parent) keep.add(a);
+      }
+    }
+    let out = [];
+    let walk = (n, depth) => {
+      if (filtering && !keep.has(n)) return;
+      out.push([n, depth]);
+      if (n.dir && (filtering || this.expanded.has(n.path))) for (let c of n.children) walk(c, depth + 1);
+    };
+    walk(this.nodes.get('/c'), 0);
+    return out;
+  }
+  renderTree() {
+    if (!this.nodes) return;
+    this.rows = this.visibleNodes();
+    let filtering = this.querySelector('.files-filter').value.trim() || this.querySelector('.files-changes-only').checked;
+    this.tree.replaceChildren(...this.rows.map(([n, depth]) => {
+      let row = document.createElement('div');
+      row.className = `ft-row ft-${n.status}${n.dir ? ' ft-dir' : ''}${n.dir && n.changes && n.status == 'base' ? ' ft-haschanges' : ''}${n == this.selected ? ' ft-selected' : ''}`;
+      row.dataset.path = n.path;
+      row.style.paddingLeft = (depth * 1.1 + .3) + 'em';
+      let open = filtering || this.expanded.has(n.path);
+      let twisty = document.createElement('span'), name = document.createElement('span');
+      twisty.className = 'ft-twisty';
+      twisty.textContent = n.dir && n.children.length ? (open ? '▾' : '▸') : '';
+      name.className = 'ft-name';
+      name.textContent = n.path == '/c' ? 'C:' : n.name;
+      row.append(twisty, name);
+      if (n.status != 'base') {
+        let tag = document.createElement('span');
+        tag.className = 'ft-tag';
+        tag.textContent = n.status == 'hidden' ? 'deleted' : n.status == 'written' ? 'saved' : n.status;
+        row.append(tag);
+      }
+      if (n.dir && n.changes && n.status == 'base') {
+        let badge = document.createElement('span');
+        badge.className = 'ft-badge';
+        badge.textContent = '● ' + n.changes;
+        badge.title = n.changes + ' change' + (n.changes == 1 ? '' : 's') + ' in here';
+        row.append(badge);
+      }
+      let size = this.sizeOf(n);
+      if (!n.dir && size != null) {
+        let s = document.createElement('span');
+        s.className = 'ft-size';
+        s.textContent = Format.bytes(size);
+        row.append(s);
+      }
+      return row;
+    }));
+    let sel = this.tree.querySelector('.ft-selected');
+    if (sel) sel.scrollIntoView({ block: 'nearest' });
+  }
+  sizeOf(n) { return n.written !== undefined ? n.written : n.base; }
+  onTreeKey(ev) {
+    if (!this.rows || !this.rows.length) return;
+    let i = this.rows.findIndex(([n]) => n == this.selected), n = this.selected;
+    let go = j => { j = Math.max(0, Math.min(j, this.rows.length - 1)); this.select(this.rows[j][0]); };
+    switch (ev.key) {
+      case 'ArrowDown': go(i + 1); break;
+      case 'ArrowUp': go(i < 0 ? 0 : i - 1); break;
+      case 'Home': go(0); break;
+      case 'End': go(this.rows.length - 1); break;
+      case 'ArrowRight': if (n && n.dir && !this.expanded.has(n.path)) this.toggle(n); else go(i + 1); break;
+      case 'ArrowLeft':
+        if (n && n.dir && this.expanded.has(n.path)) this.toggle(n);
+        else if (n && n.parent) this.select(n.parent);
+        break;
+      case 'Enter':
+        if (n && n.dir) this.toggle(n);
+        else if (n) this.editor.focus();
+        break;
+      default: return;
+    }
+    ev.preventDefault();
+  }
+
+  /* ----- The chosen file ----- */
+
+  async select(node) {
+    if (node == this.selected) return;
+    if (this.editing && this.editing.path != node.path && !this.mayLeave()) return;
+    this.selected = node;
+    this.renderTree();
+    await this.showDetail(node, !node.dir);
+  }
+  /* Show what's chosen: its status and what can be done with it, and if `load`, its
+     bytes in the editor */
+  async showDetail(n, load) {
+    let head = this.querySelector('.files-detail-head'), note = this.querySelector('.files-note');
+    let empty = this.querySelector('.files-empty');
+    head.hidden = !n;
+    note.textContent = '';
+    if (!n) { empty.hidden = false; empty.textContent = "Choose a file to see what's in it."; this.editor.hidden = true; return; }
+    this.querySelector('.files-path').textContent = FilesDialog.toDos(n.path) + (n.dir && n.path != '/c' ? '\\' : '');
+    let status = this.querySelector('.files-status');
+    status.className = 'files-status ft-' + n.status;
+    status.innerHTML = '';
+    let tag = document.createElement('span');
+    tag.className = 'ft-tag';
+    tag.textContent = FilesDialog.STATUS[n.status];
+    status.append(tag);
+    let size = this.sizeOf(n);
+    if (!n.dir && size != null) status.append(' ' + Format.bytes(size) + (n.status == 'changed' && n.base != size ? ` (was ${Format.bytes(n.base)})` : ''));
+    let actions = this.querySelector('.files-actions');
+    let button = (label, title, action) => {
+      let b = document.createElement('button');
+      b.className = 'small';
+      b.textContent = label;
+      b.title = title;
+      b.addEventListener('click', () => this.act(action));
+      return b;
+    };
+    actions.replaceChildren();
+    let gone = n.status == 'deleted' || n.status == 'hidden';
+    let deletedFolder = n.status == 'hidden' && this.deletedAncestor(n);
+    if (n.status == 'deleted') actions.append(button('Restore', 'Un-delete it, so the software sees it again', () => this.restore(n)));
+    if (deletedFolder) actions.append(button('Restore its folder', `Un-delete ${FilesDialog.toDos(deletedFolder.path)}`, () => this.restore(deletedFolder)));
+    if (!n.dir) {
+      if (n.status == 'changed') actions.append(button('Revert', 'Throw away the saved copy, back to the original', () => this.revert(n)));
+      if (!gone) actions.append(button('Delete', 'Delete it, as the software would', () => this.remove(n)));
+      actions.append(button('Replace…', 'Put a file from your computer here', () => this.upload(n.path)));
+    } else {
+      actions.append(button('Add a file here…', 'Put a file from your computer in this folder', () => this.addFile(n)));
+    }
+
+    if (n.dir) {
+      this.editing = null;
+      this.editor.hidden = true;
+      empty.hidden = false;
+      let files = [...this.nodes.values()].filter(x => !x.dir && x.path.startsWith(n.path + '/'));
+      empty.textContent = `${files.length} file${files.length == 1 ? '' : 's'} in here` + (n.changes ? `; ${n.changes} changed, added or deleted.` : ', none of them changed.');
+      if (n.status == 'deleted') note.textContent = 'The software deleted this folder: it can’t see it, or the original files in it.';
+      return;
+    }
+    if (gone) note.textContent = (n.status == 'deleted' ? 'The software deleted this file' : 'This file’s folder was deleted') + ', so it can’t see it. Shown is the original; saving puts it back, with your changes.';
+    if (!load) return;
+    // Its bytes: the saved copy, or else the original's
+    let bytes = null, original = null;
+    try {
+      if (n.base !== undefined) original = this.item.originalRead(n.path);
+      bytes = n.written !== undefined ? await this.store.read(n.path) : original;
+    } catch (e) {
+      console.error(e);
+      note.textContent = 'Couldn’t read it: ' + e.message;
+    }
+    if (!bytes) {
+      this.editing = null;
+      this.editor.hidden = true;
+      empty.hidden = false;
+      empty.textContent = gone && n.base === undefined ? 'Its contents are gone: it isn’t in the original either.' : 'Nothing to show.';
+      return;
+    }
+    empty.hidden = true;
+    this.editor.hidden = false;
+    this.editing = n;
+    this.editor.onsave = async bytes => {
+      await this.saveFile(n.path, bytes);
+      // Now it's changed: show how
+      if (original && !this.editor.compare) this.editor.chooseCompare('given');
+    };
+    this.editor.open(bytes, { name: n.name, compare: original, compareLabel: 'The original', showCompare: n.status == 'changed' });
+  }
+  deletedAncestor(n) {
+    for (let a = n.parent; a; a = a.parent) if (a.deleted && a.written === undefined) return a;
+    return null;
+  }
+  async act(action) {
+    try { await action(); }
+    catch (e) { console.error(e); alert('Failed: ' + e.message); }
+  }
+  /* The editor saved: keep its bytes as the file's (back from the dead, if deleted) */
+  async saveFile(path, bytes) {
+    await this.store.write(path, bytes);
+    let gone = OverlayStore.deleted(await this.store.log()).filter(p => p == path || path.startsWith(p + '/'));
+    if (gone.length) await this.store.undelete(gone);
+    await this.refresh();
+  }
+  /* After changing a file other than through the editor, show it afresh */
+  async reload(n) {
+    this.editing = null;
+    await this.refresh();
+    let now = this.nodes.get(n.path);
+    if (now) { this.selected = now; this.renderTree(); await this.showDetail(now, !now.dir); }
+  }
+  async restore(n) {
+    if (!n.dir && this.editor.modified && this.editing == n && !this.mayLeave()) return;
+    // Restoring a folder brings back what was deleted in it, too
+    await this.store.undelete(OverlayStore.deleted(await this.store.log()).filter(p => p == n.path || p.startsWith(n.path + '/')));
+    await this.reload(this.selected || n);
+  }
+  async revert(n) {
+    if (!confirm(`Throw away the saved copy of ${FilesDialog.toDos(n.path)}? The original comes back in its place.`)) return;
+    await this.store.remove(n.path);
+    await this.store.undelete([n.path]);
+    await this.reload(n);
+  }
+  async remove(n) {
+    let what = n.status == 'added' || n.status == 'written' ? '' : ' The original stays in the software’s files, hidden, and can be restored.';
+    if (!confirm(`Delete ${FilesDialog.toDos(n.path)}?` + what)) return;
+    if (n.written !== undefined) await this.store.remove(n.path);
+    if (n.base !== undefined) await this.store.deletePath(n.path);
+    await this.reload(n);
+  }
+  addFile(dir) {
+    let base = dir || (this.selected && (this.selected.dir ? this.selected : this.selected.parent));
+    let prefix = base && base.path != '/c' ? FilesDialog.toDos(base.path).slice(3) + '\\' : '';
+    let path = prompt('Where on drive C: should the file go? (e.g. GAME\\SAVE.DAT)', prefix);
+    if (path && path.trim() && !/[\\/]$/.test(path.trim())) this.upload(FilesDialog.toPath(path.trim()), true);
+  }
+  upload(path, named = false) {
+    this.uploadPath = path;
+    this.uploadNamed = named;
+    let input = this.querySelector('.files-upload');
+    input.value = '';
+    input.click();
+  }
+  async onUpload(ev) {
+    let file = ev.target.files[0], path = this.uploadPath;
+    if (!file || !path) return;
+    let existing = this.nodes.get(path);
+    if (this.editing && this.editing.path == path && this.editor.modified && !this.mayLeave()) return;
+    if (existing && !this.uploadNamed && !confirm(`Replace ${FilesDialog.toDos(path)} with ${file.name}?`)) return;
+    await this.act(async () => {
+      await this.saveFile(path, new Uint8Array(await file.arrayBuffer()));
+      for (let p = path.slice(0, path.lastIndexOf('/')); p.length > 2; p = p.slice(0, p.lastIndexOf('/'))) this.expanded.add(p);
+      await this.reload({ path });
+    });
+  }
+}
+customElements.define('emularity-files-dialog', FilesDialog);
 
 /* Add software to the collection: from one of the platform's sources (see
    SoftwareSource), a URL, or an upload. open(platform) shows it for a platform's item
@@ -2382,8 +3375,9 @@ class AddDialog extends HTMLElement {
     this.innerHTML = `
       <dialog>
         <button class="close-dialog" title="Close">✕</button>
-        <h3>Add software</h3>
+        <h3 class="add-heading">Add software</h3>
         <div class="add-tabs">
+          <button data-tab="system" class="system-tab">New system</button>
           <span class="source-tabs"></span>
           <button data-tab="url">From URL</button>
           <button data-tab="upload">Upload</button>
@@ -2396,6 +3390,25 @@ class AddDialog extends HTMLElement {
           </div>
           <p class="field-hint source-hint"></p>
           <div class="search-results"></div>
+        </div>
+
+        <div class="tab-panel" data-panel="system" style="display: none">
+          <label>Name <input type="text" name="system-title" placeholder="My PC"></label>
+          <div class="system-grid">
+            <label>Hard disk 1 <select name="system-hda"></select></label>
+            <label>Hard disk 2 <select name="system-hdb"></select></label>
+            <label>CPU <select name="system-cpu"></select></label>
+            <label>Memory <select name="system-memory"></select></label>
+            <label>Video memory <select name="system-vga"></select></label>
+            <label>Network card <select name="system-net"></select></label>
+          </div>
+          <label class="check"><input type="checkbox" name="system-lan"> Connect to the local network (shared by every machine running in this browser)</label>
+          <label class="check"><input type="checkbox" name="system-acpi"> ACPI power management <span class="field-hint">(leave off for Windows 9x: with it, shutting down doesn't turn the machine off)</span></label>
+          <label>CD-ROM <input type="file" name="system-cd" multiple></label>
+          <label>Floppy A: <input type="file" name="system-fda"></label>
+          <p class="field-hint">The hard disks start blank, for an operating system to be installed on them (Windows 98 setup partitions and formats them itself). They're kept in this browser's storage, saved as they're written, and can be exported as .img files for other emulators. Disks can be added or swapped later.</p>
+          <button class="primary add-system">Create</button>
+          <button class="secondary add-system-start">Create and start</button>
         </div>
 
         <div class="tab-panel" data-panel="url" style="display: none">
@@ -2438,6 +3451,8 @@ class AddDialog extends HTMLElement {
     // Shift+click adds without closing, to add several titles in a row
     this.querySelector('.add-url').addEventListener('click', ev => this.addFromURL(ev.shiftKey));
     this.querySelector('.add-upload').addEventListener('click', ev => this.addFromUpload(ev.shiftKey));
+    this.querySelector('.add-system').addEventListener('click', () => this.addSystem(false));
+    this.querySelector('.add-system-start').addEventListener('click', () => this.addSystem(true));
   }
   field(name) { return this.querySelector(`[name="${name}"]`); }
   setError(msg) { this.querySelector('.error-note').textContent = msg || ''; }
@@ -2449,6 +3464,10 @@ class AddDialog extends HTMLElement {
     this.querySelector('.upload-hint').textContent = platform.hint;
     this.field('file').accept = platform.accept;
     this.querySelectorAll('.exe-field').forEach(el => { el.style.display = platform.exeField ? '' : 'none'; });
+    this.querySelector('.add-heading').textContent = platform.newSystem ? 'Add system' : 'Add software';
+    let systemTab = this.querySelector('.system-tab');
+    systemTab.hidden = !platform.newSystem;
+    if (platform.newSystem) this.resetSystemForm();
     // One tab per source, all sharing the search panel
     let tabs = this.querySelector('.source-tabs');
     tabs.replaceChildren(...platform.sources.map(source => {
@@ -2460,7 +3479,58 @@ class AddDialog extends HTMLElement {
       return btn;
     }));
     this.dialog.showModal();
-    this.showTab(tabs.firstElementChild || this.querySelector('[data-tab="url"]'));
+    this.showTab(platform.newSystem ? systemTab : tabs.firstElementChild || this.querySelector('[data-tab="url"]'));
+  }
+
+  /* ----- A new system (see X86Item's Systems) ----- */
+
+  resetSystemForm() {
+    let p = this.platform, select = (name, options, value) => {
+      this.field(name).replaceChildren(...options.map(([v, label]) => new Option(label, v)));
+      this.field(name).value = value;
+    };
+    let sizes = p.HARD_DISK_SIZES.map(n => [n, Format.bytes(n)]);
+    select('system-hda', sizes, 2048 * 1048576);
+    select('system-hdb', [['', 'None'], ...sizes], '');
+    select('system-cpu', Object.entries(p.CPUS).map(([k, c]) => [k, c.label]), 'i686');
+    this.field('system-cpu').onchange = () => p.cpuChanged(this.field('system-cpu'), this.field('system-memory'));
+    select('system-memory', p.memorySizes('i686'), 512); // current Linux installers need more than 256 MB
+    select('system-vga', p.VGA_MEMORY_SIZES.map(mb => [mb, mb + ' MB']), 8);
+    select('system-net', Object.entries(p.NET_CARDS), 'ne2k');
+    this.field('system-title').value = '';
+    this.field('system-lan').checked = false;
+    this.field('system-acpi').checked = false;
+    this.field('system-cd').accept = p.mediaAccept.cdrom;
+    this.field('system-fda').accept = p.mediaAccept.floppy;
+    this.field('system-cd').value = this.field('system-fda').value = '';
+  }
+  async addSystem(start) {
+    this.setError('');
+    let f = name => this.field(name);
+    let cdFiles = f('system-cd').files, floppy = f('system-fda').files[0];
+    // Check the disks before making anything: a cue sheet needs the files it names
+    let cds;
+    try { cds = cdFiles.length ? await CollectionItem.groupFiles(cdFiles) : []; }
+    catch (e) { return this.setError(e.message); }
+    let title = f('system-title').value.trim() || this.collection.untitled('PC');
+    let item = this.add(this.platform.systemRecord({
+      title, cpu: f('system-cpu').value, hda: +f('system-hda').value, hdb: +f('system-hdb').value || 0,
+      memory: +f('system-memory').value, vgaMemory: +f('system-vga').value, netCard: f('system-net').value,
+      acpi: f('system-acpi').checked, network: f('system-lan').checked ? 'lan' : null,
+    }));
+    try {
+      for (let [i, disk] of cds.entries()) {
+        let added = await item.addDisk({ ...disk, drive: 'cdrom' });
+        if (!i) item.setInserted('cdrom', added.id);
+      }
+      if (floppy) item.setInserted('fda', (await item.addDisk({ name: floppy.name, file: floppy, drive: 'fda' })).id);
+    } catch (e) {
+      console.error(e);
+      this.setError(`"${title}" was made, but adding its disks failed (${e.message}); add them from Edit info.`);
+      return;
+    }
+    this.dialog.close();
+    if (start) item.launch();
   }
   showTab(btn) {
     this.querySelectorAll('.add-tabs button').forEach(b => b.classList.toggle('active', b == btn));
@@ -2639,10 +3709,13 @@ class CollectionPlayer extends HTMLElement {
       <span class="pb-timer" title="Time played this session">0:00</span>
       <span class="pb-controls">
         <span class="pb-media-wrap">
-          <button class="pb-media" title="Disks: insert, swap or eject">💿</button>
           <div class="pb-media-popup" hidden></div>
           <input type="file" class="pb-media-file" multiple hidden>
           <input type="file" class="pb-media-folder" webkitdirectory hidden>
+        </span>
+        <span class="pb-keys-wrap">
+          <button class="pb-keys" title="Send keys your computer would keep for itself (Ctrl+Alt+Del, function keys…)">⌨</button>
+          <div class="pb-media-popup pb-keys-popup" hidden></div>
         </span>
         <button class="pb-network" title="Show the machines on the local network">🖧</button>
         <button class="pb-capture" title="Capture mouse (Esc releases it)">🖱</button>
@@ -2696,7 +3769,20 @@ class CollectionPlayer extends HTMLElement {
       captureBtn.remove();
     }
 
-    this.setUpMediaMenu(bar);
+    // CPU graphs, and drive and network lights, for what the emulator reports on. The
+    // drive lights double as the disk menus: click the floppy to change floppies.
+    await Promise.all([import('../src/ui/activity-lights.js'), import('../src/ui/performance-graphs.js')]);
+    let graphs = document.createElement('emularity-performance-graphs');
+    graphs.className = 'pb-graphs';
+    graphs.emulator = this.emu;
+    let lights = document.createElement('emularity-activity-lights');
+    lights.className = 'pb-lights';
+    lights.emulator = this.emu;
+    bar.querySelector('.pb-media-wrap').prepend(lights);
+    bar.querySelector('.pb-controls').prepend(graphs);
+
+    this.setUpMediaMenu(bar, lights);
+    this.setUpKeysMenu(bar);
 
     bar.querySelector('.pb-fullscreen').addEventListener('click', () => {
       let c = this.emu.canvas;
@@ -2707,14 +3793,15 @@ class CollectionPlayer extends HTMLElement {
     this.replaceChildren(bar, this.emu);
   }
 
-  /* The 💿 menu: each removable drive, what's in it, and the title's disks that fit */
-  setUpMediaMenu(bar) {
+  /* The disk menus, one per removable drive, opened from its light: what's in it, and
+     the title's disks that fit */
+  setUpMediaMenu(bar, lights) {
     let item = this.item, emu = this.emu;
-    let wrap = bar.querySelector('.pb-media-wrap');
-    if (!item.constructor.mediaDrives || !('mediaDrives' in emu)) { wrap.remove(); return; }
-    let button = wrap.querySelector('.pb-media'), popup = wrap.querySelector('.pb-media-popup');
+    let wrap = bar.querySelector('.pb-media-wrap'), popup = wrap.querySelector('.pb-media-popup');
+    if (!item.constructor.mediaDrives || !('mediaDrives' in emu)) { popup.remove(); return; }
     let fileInput = wrap.querySelector('.pb-media-file'), folderInput = wrap.querySelector('.pb-media-folder');
-    let note = '', fileDrive = null;
+    let note = '', fileDrive = null, open = null; // open: the id of the drive whose menu is showing
+    lights.drives = emu.mediaDrives;
 
     // Keep the title's record in step with the drives, so the same disks are in next
     // time. Disks the title doesn't own (its main image, the machine's own) aren't kept.
@@ -2722,6 +3809,7 @@ class CollectionPlayer extends HTMLElement {
       let { drive, current } = ev.detail;
       let id = current && item.disks.some(d => d.id == current.id) ? current.id : null;
       if (id || item.inserted[drive]) item.setInserted(drive, id);
+      lights.drives = emu.mediaDrives;
       if (!popup.hidden) render();
     });
 
@@ -2780,7 +3868,7 @@ class CollectionPlayer extends HTMLElement {
 
     let render = () => {
       let rows = [];
-      for (let drive of emu.mediaDrives) {
+      for (let drive of emu.mediaDrives.filter(d => d.id == open)) {
         let section = document.createElement('div');
         section.className = 'pbm-drive';
         let head = document.createElement('div');
@@ -2826,7 +3914,7 @@ class CollectionPlayer extends HTMLElement {
       }
       // DOSBox swaps every multi-disk drive at once
       let together = emu.mediaDrives.filter(d => d.disks && d.disks.length > 1);
-      if (together.length > 1) {
+      if (together.length > 1 && together.some(d => d.id == open)) {
         let p = document.createElement('p');
         p.className = 'pbm-hint';
         p.textContent = `Changing disks also changes ${together.map(d => d.label).join(' and ')} together — DOSBox swaps every drive at once.`;
@@ -2840,14 +3928,87 @@ class CollectionPlayer extends HTMLElement {
       }
       popup.replaceChildren(...rows);
     };
+    let close = () => {
+      popup.hidden = true;
+      open = null;
+      for (let el of lights.querySelectorAll('.al-open')) el.classList.remove('al-open');
+    };
+    lights.addEventListener('driveclick', ev => {
+      let { drive, element } = ev.detail;
+      if (open == drive) { close(); return; }
+      close();
+      open = drive;
+      note = '';
+      element.classList.add('al-open');
+      popup.hidden = false;
+      render();
+      // Under the drive's light, kept on screen
+      popup.style.right = 'auto';
+      let at = element.getBoundingClientRect(), box = wrap.getBoundingClientRect();
+      let left = Math.min(at.left, innerWidth - 8 - popup.offsetWidth);
+      popup.style.left = Math.max(8, left) - box.left + 'px';
+    });
+    popup.addEventListener('click', ev => ev.stopPropagation());
+    document.addEventListener('click', ev => { if (!lights.contains(ev.target)) close(); });
+  }
+
+  /* The ⌨ menu: key combinations the host OS or browser would catch, sent to the machine
+     (for emulators with sendKeys) */
+  static KEY_COMBOS = [
+    ['Ctrl+Alt+Del', ['Ctrl', 'Alt', 'Delete']],
+    ['Ctrl+Shift+Esc (Task Manager)', ['Ctrl', 'Shift', 'Esc']],
+    ['Ctrl+Esc (Start menu)', ['Ctrl', 'Esc']],
+    ['Windows key', ['Win']],
+    ['Win+R (Run)', ['Win', 'R']],
+    ['Alt+Tab', ['Alt', 'Tab']],
+    ['Alt+F4', ['Alt', 'F4']],
+    ['Ctrl+W', ['Ctrl', 'W']],
+    ['Esc', ['Esc']],
+  ];
+  setUpKeysMenu(bar) {
+    let emu = this.emu, wrap = bar.querySelector('.pb-keys-wrap');
+    if (typeof emu.sendKeys != 'function') { wrap.remove(); return; }
+    let button = wrap.querySelector('.pb-keys'), popup = wrap.querySelector('.pb-keys-popup');
+    let close = () => { popup.hidden = true; button.classList.toggle('active', !!(emu.heldKeys && emu.heldKeys.length)); };
+    let act = fn => () => { fn(); close(); emu.focusScreen(); };
+    let head = text => Object.assign(document.createElement('div'), { className: 'pbm-head', textContent: text });
+    let key = (label, fn, title) => {
+      let b = document.createElement('button');
+      b.textContent = label;
+      if (title) b.title = title;
+      b.addEventListener('click', act(fn));
+      return b;
+    };
+    let grid = (cls, buttons) => { let g = document.createElement('div'); g.className = 'pbk-grid ' + cls; g.append(...buttons); return g; };
+    // Modifiers leave the menu open, for the key that goes with them (Ctrl, Alt, then F1)
+    let mods = ['Ctrl', 'Alt', 'Shift', 'Win'].map(m => {
+      let b = document.createElement('button');
+      b.textContent = m;
+      b.title = `Hold ${m} down until the next key you press`;
+      b.dataset.mod = m;
+      b.addEventListener('click', () => emu.holdKey(m));
+      return b;
+    });
+    popup.append(
+      ...CollectionPlayer.KEY_COMBOS.map(([label, keys]) => key(label, () => emu.sendKeys(keys))),
+      head('Hold down until your next key'),
+      grid('pbk-mods', mods),
+      head('Function keys'),
+      grid('', Array.from({ length: 12 }, (_, i) => key('F' + (i + 1), () => emu.sendKeys(['F' + (i + 1)])))));
+    // While modifiers are held, the button says which
+    emu.addEventListener('heldkeyschange', ev => {
+      let held = ev.detail;
+      mods.forEach(b => b.classList.toggle('active', held.includes(b.dataset.mod)));
+      button.textContent = held.length ? '⌨ ' + held.join('+') + '+' : '⌨';
+      button.classList.toggle('active', !!held.length || !popup.hidden);
+    });
     button.addEventListener('click', ev => {
       ev.stopPropagation();
       popup.hidden = !popup.hidden;
-      button.classList.toggle('active', !popup.hidden);
-      if (!popup.hidden) { note = ''; render(); }
+      button.classList.toggle('active', !popup.hidden || !!(emu.heldKeys && emu.heldKeys.length));
     });
     popup.addEventListener('click', ev => ev.stopPropagation());
-    document.addEventListener('click', () => { popup.hidden = true; button.classList.remove('active'); });
+    document.addEventListener('click', close);
   }
 
   /* `how` is the emulator's exit detail: { shutdown } when an operating system shut the
@@ -2900,26 +4061,32 @@ class EmularityCollection extends HTMLElement {
 
   connectedCallback() {
     let platforms = CollectionItem.platforms;
-    let stored = {};
-    try { stored = JSON.parse(localStorage.getItem(EmularityCollection.STORAGE_KEY)) || {}; } catch (e) {}
+    let stored = EmularityCollection.readStored() || {};
     this.platform = platforms[stored.platform] ? stored.platform : Object.keys(platforms)[0];
     this.sort = EmularityCollection.SORTS[stored.sort] ? stored.sort : 'added-desc';
     this.prefs = { muted: !!stored.muted, theater: !!stored.theater };
-    this.x86Seeded = stored.x86Seeded;
+    // Starter records added so far, by id
+    this.seeded = new Set(stored.seeded || []);
+    if (stored.x86Seeded) X86Item.starterRecords().forEach(r => this.seeded.add(r.id)); // as saved before
     AudioMute.set(this.prefs.muted);
 
     let changed = false;
+    this.synced = new Map();
     for (let record of stored.items || []) {
       let item = CollectionItem.fromRecord(record);
       if (!item) continue;
+      this.synced.set(record.id, JSON.stringify(record));
       changed = item.normalize() || changed;
       this.adopt(item);
     }
-    // One-time x86 starter content. Seeded only if the user has never had any x86
-    // items, and remembered so removing them sticks.
-    if (!this.x86Seeded && !this.items.some(i => i.record.platform == 'x86')) {
-      X86Item.starterRecords().forEach(r => this.adopt(CollectionItem.fromRecord(r)));
-      this.x86Seeded = changed = true;
+    // Starter content, each added once (see CollectionItem.starterRecords)
+    for (let cls of Object.values(platforms)) {
+      for (let r of cls.starterRecords()) {
+        if (this.seeded.has(r.id)) continue;
+        if (!this.items.some(i => i.record.id == r.id)) this.adopt(CollectionItem.fromRecord(r));
+        this.seeded.add(r.id);
+        changed = true;
+      }
     }
     if (changed) this.save();
 
@@ -2927,6 +4094,12 @@ class EmularityCollection extends HTMLElement {
     document.addEventListener('click', () => this.closeMenus());
     this.addEventListener('shownetwork', () => this.showNetwork());
     window.addEventListener('hashchange', () => this.renderRoute());
+    // Machines added, changed or removed in other tabs
+    window.addEventListener('storage', ev => {
+      if (ev.key != EmularityCollection.STORAGE_KEY) return;
+      let stored = EmularityCollection.readStored();
+      if (stored && this.merge(stored)) this.renderGrid();
+    });
     if (!location.hash) history.replaceState(null, '', '#' + this.platform);
     this.renderRoute();
     this.fetchMissingRatings();
@@ -2939,6 +4112,7 @@ class EmularityCollection extends HTMLElement {
     item.addEventListener('itemchange', () => { this.save(); this.renderGrid(); });
     item.addEventListener('itemedit', () => this.editDialog.open(item));
     item.addEventListener('iteminstance', () => this.instanceDialog.open(item));
+    item.addEventListener('itemfiles', () => this.filesDialog.open(item));
     item.addEventListener('itemremove', () => this.dropItem(item));
     item.addEventListener('menuopen', () => this.closeMenus());
     this.items.push(item);
@@ -2962,8 +4136,17 @@ class EmularityCollection extends HTMLElement {
     while (taken.has(base + ' ' + n)) n++;
     return base + ' ' + n;
   }
-  /* Options: title, and diskSize to give it a bigger hard disk (see X86Item) */
-  async newInstance(item, { title, diskSize } = {}) {
+  /* A title not yet taken: `base`, or "base 2", "base 3"... */
+  untitled(base) {
+    let taken = new Set(this.items.map(i => i.record.title));
+    if (!taken.has(base)) return base;
+    let n = 2;
+    while (taken.has(base + ' ' + n)) n++;
+    return base + ' ' + n;
+  }
+  /* Options: title, diskSize to give it a bigger hard disk, and for a system (see
+     X86Item), copyDisks to start with its hard disks as they are now, not blank */
+  async newInstance(item, { title, diskSize, copyDisks } = {}) {
     let disk = null;
     if (diskSize) {
       // Can take a while (the whole disk is read): progress shows on the original's card
@@ -2994,6 +4177,10 @@ class EmularityCollection extends HTMLElement {
       try { await LocalStore.uploadPut(to, await LocalStore.uploadGet(from)); } catch (e) { console.error(e); }
     }
     let copy = this.addItem(record);
+    if (copyDisks && item.isSystem) {
+      try { await copy.copyHardDisksFrom(item); }
+      catch (e) { console.error(e); alert('Failed to copy the hard disks: ' + e.message); copy.render(); }
+    }
     if (record.source == 'upload') {
       // Uploads are stored per item
       try { await LocalStore.uploadPut(copy.record.id, await LocalStore.uploadGet(item.record.id)); }
@@ -3015,15 +4202,67 @@ class EmularityCollection extends HTMLElement {
   closeMenus() {
     this.items.forEach(i => i.closeMenu());
   }
+  /* The collection is one localStorage entry shared by every open tab, and each tab
+     works on its own copy. So saving merges instead of overwriting: what this tab
+     added, changed or removed since it last read the entry goes in, and everything
+     else is taken as stored, with whatever other tabs did. (Overwriting, a tab opened
+     before a machine was made would drop it the next time it saved anything.) */
   save() {
+    let stored = EmularityCollection.readStored();
+    if (stored) this.merge(stored);
     try {
       localStorage.setItem(EmularityCollection.STORAGE_KEY, JSON.stringify({
         platform: this.platform, sort: this.sort, muted: this.prefs.muted, theater: this.prefs.theater,
-        x86Seeded: this.x86Seeded, items: this.items.map(i => i.record),
+        seeded: [...this.seeded], items: this.items.map(i => i.record),
       }));
+      this.synced = new Map(this.items.map(i => [i.record.id, JSON.stringify(i.record)]));
     } catch (e) {
       console.error('Failed to save collection', e);
     }
+  }
+  /* The stored collection, or null if there's none or it can't be read */
+  static readStored() {
+    try {
+      let stored = JSON.parse(localStorage.getItem(EmularityCollection.STORAGE_KEY));
+      return stored && Array.isArray(stored.items) ? stored : null;
+    } catch (e) {
+      return null;
+    }
+  }
+  /* Bring in other tabs' changes to the stored collection. this.synced holds each
+     record as this tab last read or wrote it, which tells this tab's own changes
+     (which win) from theirs. Returns whether anything changed here. */
+  merge(stored) {
+    let changed = false, mine = new Map(this.items.map(i => [i.record.id, i]));
+    let unchangedHere = item => JSON.stringify(item.record) == this.synced.get(item.record.id);
+    for (let id of stored.seeded || []) this.seeded.add(id);
+    for (let record of stored.items) {
+      let item = mine.get(record.id), json = JSON.stringify(record);
+      if (!item) {
+        if (this.synced.has(record.id)) continue; // removed here
+        item = CollectionItem.fromRecord(record);
+        if (!item) continue;
+        this.adopt(item); // added elsewhere
+        changed = true;
+      } else if (unchangedHere(item) && this.synced.get(record.id) != json) {
+        // Changed elsewhere
+        for (let k of Object.keys(item.record)) delete item.record[k];
+        Object.assign(item.record, JSON.parse(json));
+        if (item.isConnected) item.render();
+        changed = true;
+      }
+      if (!this.synced.has(record.id) || unchangedHere(item)) this.synced.set(record.id, json);
+    }
+    // Removed elsewhere (but not the one playing here)
+    let ids = new Set(stored.items.map(r => r.id));
+    for (let [id, item] of mine) {
+      if (ids.has(id) || !this.synced.has(id) || !unchangedHere(item) || (this.player && this.player.item == item)) continue;
+      this.items = this.items.filter(i => i != item);
+      this.synced.delete(id);
+      item.remove();
+      changed = true;
+    }
+    return changed;
   }
   /* Look up archive.org ratings for archive-sourced items that don't have one yet */
   async fetchMissingRatings() {
@@ -3082,7 +4321,9 @@ class EmularityCollection extends HTMLElement {
       <p class="empty-note" style="display: none">No software installed for this platform yet. Click "Add software" to get started.</p>
       <emularity-add-dialog></emularity-add-dialog>
       <emularity-edit-dialog></emularity-edit-dialog>
-      <emularity-instance-dialog></emularity-instance-dialog>`;
+      <emularity-instance-dialog></emularity-instance-dialog>
+      <emularity-files-dialog></emularity-files-dialog>`;
+    this.filesDialog = this.querySelector('emularity-files-dialog');
     this.instanceDialog = this.querySelector('emularity-instance-dialog');
     this.instanceDialog.collection = this;
     this.addDialog = this.querySelector('emularity-add-dialog');
@@ -3101,7 +4342,7 @@ class EmularityCollection extends HTMLElement {
 
     this.addCard = document.createElement('div');
     this.addCard.className = 'game-card add-card';
-    this.addCard.textContent = '+ Add software';
+    this.addCard.textContent = '+ Add software'; // (or system: see renderGrid)
     this.addCard.addEventListener('click', () => this.addDialog.open(CollectionItem.platforms[this.platform]));
   }
   renderTabs() {
@@ -3124,6 +4365,7 @@ class EmularityCollection extends HTMLElement {
     if (this.playing || !grid) return;
     let cmp = (EmularityCollection.SORTS[this.sort] || EmularityCollection.SORTS['added-desc']).cmp;
     let items = this.items.filter(i => i.record.platform == this.platform).sort((a, b) => cmp(a.record, b.record));
+    this.addCard.textContent = CollectionItem.platforms[this.platform].newSystem ? '+ Add system' : '+ Add software';
     grid.replaceChildren(...items, this.addCard);
     this.querySelector('.sort-select').value = this.sort;
     this.querySelector('.empty-note').style.display = items.length ? 'none' : 'block';

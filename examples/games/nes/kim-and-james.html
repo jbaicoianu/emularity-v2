@@ -1,0 +1,62 @@
+<!doctype html>
+<!-- Kim & James, on its own: put this file next to kim-and-james.nes and open it.
+     Emularity and the NES emulator come from the project's GitHub Pages site. -->
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="initial-scale=1.0, user-scalable=no, maximum-scale=1.0, width=device-width">
+    <title>Kim &amp; James</title>
+    <link rel="stylesheet" href="https://jbaicoianu.github.io/emularity-v2/css/emularity.css">
+    <script type="module" src="https://jbaicoianu.github.io/emularity-v2/src/emularity.js"></script>
+    <style>
+      html, body { margin: 0; height: 100%; background: black; color: #ccc; font: 16px sans-serif; overflow: hidden; }
+      emularity-libretro { display: block; width: 100%; height: 100%; }
+      #pick { display: flex; height: 100%; align-items: center; justify-content: center; flex-direction: column; gap: 1em; text-align: center; padding: 0 16px; }
+      #pick[hidden] { display: none; }
+      #pick label { padding: .6em 1.2em; border: 1px solid #666; border-radius: 6px; cursor: pointer; }
+      #pick label:hover { background: #222; }
+    </style>
+  </head>
+  <body>
+    <div id="pick" hidden>
+      <p>Your browser won't let this page read <code>kim-and-james.nes</code> by itself.<br>
+         Choose it (or drop it here) to play.</p>
+      <label>Choose the game file<input type="file" accept=".nes" hidden></label>
+    </div>
+    <script type="module">
+      const SITE = 'https://jbaicoianu.github.io/emularity-v2/';
+      const ROM = 'kim-and-james.nes';
+
+      async function play(rom) {
+        document.getElementById('pick').hidden = true;
+        await customElements.whenDefined('emularity-libretro');
+        let emu = document.createElement('emularity-libretro');
+        emu.setAttribute('wasmroot', SITE + 'emulators/libretro');
+        emu.setAttribute('core', 'mesen');
+        emu.setAttribute('splashlogo', SITE + 'logos/emularity-transparent.png');
+        emu.setAttribute('persist', 'kim-and-james'); // keeps the game's saves
+        emu.romBlob = rom;
+        emu.setAttribute('romname', ROM);
+        document.body.append(emu);
+      }
+
+      // Served from a web server, the game is right there. Opened as a file, most
+      // browsers refuse to read files beside it, so ask for it instead.
+      try {
+        let res = await fetch(ROM);
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        play(await res.blob());
+      } catch (e) {
+        let pick = document.getElementById('pick');
+        pick.hidden = false;
+        pick.querySelector('input').onchange = ev => ev.target.files[0] && play(ev.target.files[0]);
+        addEventListener('dragover', ev => ev.preventDefault());
+        addEventListener('drop', ev => {
+          ev.preventDefault();
+          let file = ev.dataTransfer.files[0];
+          if (file && !pick.hidden) play(file);
+        });
+      }
+    </script>
+  </body>
+</html>
