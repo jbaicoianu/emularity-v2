@@ -1,6 +1,7 @@
 /* <emularity-hex-editor>: a hex editor for one file's bytes, in the classic layout:
    offsets, the bytes in hex, and the same bytes as characters (by default as DOS shows
-   them, code page 437).
+   them, code page 437). It also has a text view, for reading and editing a text file
+   as text; files that look like text open in it.
 
      let editor = document.createElement('emularity-hex-editor');
      editor.open(bytes, { name: 'SAVE.DAT', compare: original, compareLabel: 'The original' });
@@ -15,11 +16,17 @@
    Alt+Up/Down step between them: handy for finding where a game keeps a value, by
    comparing saves from before and after it changes.
 
+   The text view shows the bytes as lines of text, using the file's own line endings
+   (CR LF for DOS, or LF) and keeping them when it's edited. Bytes that aren't text are
+   shown as symbols that stand for them (as DOS draws them, or as ␀, ␛ and the like), so
+   nothing is lost either way. Edits there share the hex view's undo, save and changes.
+
    Only the rows on screen are drawn, so big files scroll as fast as small ones.
    Emits 'modifiedchange' when the bytes become different from (or the same as) the
    last saved ones. */
 
 const ROW = 16;
+const TEXT_MAX = 8 * 1048576; // bigger files only get the hex view
 
 /* Code page 437: what DOS draws for each byte */
 const CP437 = [...(
@@ -115,6 +122,14 @@ emularity-hex-editor input[type="checkbox"] { padding: 0; }
 .hx-inspector .hx-tools { margin-top: .6em; display: flex; flex-wrap: wrap; gap: .3em; align-items: center; }
 .hx-root.hx-root .hx-inspector .hx-tools input { width: 5em; font-family: ui-monospace, Consolas, monospace; }
 .hx-inspector .hx-help { color: #666; line-height: 1.5; margin-top: .8em; }
+.hx-root.hx-root .hx-views button[aria-pressed="true"] { border-color: var(--hx-accent); color: var(--hx-accent); background: #0f2a2e; }
+.hx-root.hx-root textarea.hx-text {
+  flex: 1; display: block; width: auto; min-width: 0; min-height: 0; margin: 0; resize: none;
+  box-sizing: border-box; padding: .4em 1ch; border: 0; border-radius: 0; outline: none;
+  font: 13px/1.5 ui-monospace, Consolas, 'DejaVu Sans Mono', 'Liberation Mono', monospace;
+  color: #ddd; background: #0b0b0b; white-space: pre; overflow: auto; tab-size: 8;
+}
+.hx-root.hx-root textarea.hx-text.hx-wrap { white-space: pre-wrap; overflow-wrap: anywhere; }
 .hx-status { padding: .25em .6em; border-top: 1px solid #2a2a2a; color: #999; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: #111; }
 .hx-status b { color: #ddd; font-weight: normal; }
 .hx-status .hx-warn { color: #ffcf5c; }
@@ -143,6 +158,8 @@ export class HexEditor extends HTMLElement {
   cursor = 0;                 // may be data.length: the place to add bytes at the end
   nibble = 0;                 // in the hex column: 1 once the high digit has been typed
   pane = 'hex';               // the column typed into: 'hex' or 'text'
+  viewMode = 'hex';           // shown as 'hex' (with characters beside), or as 'text'
+  eol = '\r\n';               // in the text view, the line ending that makes a line
   anchor = null;              // the selection's other end (inclusive), or null for none
   insert = false;
   cp437 = true;
@@ -166,12 +183,16 @@ export class HexEditor extends HTMLElement {
     }
     this.innerHTML = `
       <div class="hx-toolbar">
+        <span class="hx-group hx-views" role="group" aria-label="View">
+          <button data-cmd="view-hex" title="The bytes in hex, with their characters beside them">Hex</button>
+          <button data-cmd="view-text" title="The file as text">Text</button>
+        </span>
         <span class="hx-group">
           <button data-cmd="undo" title="Undo (Ctrl+Z)">↶</button>
           <button data-cmd="redo" title="Redo (Ctrl+Y)">↷</button>
         </span>
-        <label title="An offset: 0x1A0, 1A0h or $1A0 are hex, 416 is decimal; +10 or -0x10 move from the cursor">Go to <input type="text" class="hx-goto" placeholder="0x0"></label>
-        <span class="hx-group">
+        <label class="hx-hex-only" title="An offset: 0x1A0, 1A0h or $1A0 are hex, 416 is decimal; +10 or -0x10 move from the cursor">Go to <input type="text" class="hx-goto" placeholder="0x0"></label>
+        <span class="hx-group hx-hex-only">
           <select class="hx-find-mode" title="What to look for">
             <option value="text">Text</option>
             <option value="itext">Text, any case</option>
@@ -185,7 +206,7 @@ export class HexEditor extends HTMLElement {
           <button data-cmd="findnext" title="Next match (F3)">▶</button>
           <span class="hx-find-count"></span>
         </span>
-        <span class="hx-group">
+        <span class="hx-group hx-hex-only">
           <select class="hx-compare" title="Mark the bytes that differ from another version of the file"></select>
           <button data-cmd="diffprev" title="Previous difference (Alt+↑)">◀</button>
           <button data-cmd="diffnext" title="Next difference (Alt+↓)">▶</button>
@@ -193,7 +214,8 @@ export class HexEditor extends HTMLElement {
         </span>
         <span class="hx-grow"></span>
         <span class="hx-group">
-          <button data-cmd="mode" class="hx-mode" title="Whether typing replaces bytes or inserts new ones (Insert key)">Overwrite</button>
+          <label class="hx-text-only" title="Wrap long lines to fit"><input type="checkbox" class="hx-wrap-lines"> Wrap</label>
+          <button data-cmd="mode" class="hx-mode hx-hex-only" title="Whether typing replaces bytes or inserts new ones (Insert key)">Overwrite</button>
           <label title="Show bytes as DOS draws them (code page 437), or as plain ASCII"><input type="checkbox" class="hx-cp437" checked> DOS characters</label>
         </span>
         <span class="hx-group">
@@ -208,6 +230,7 @@ export class HexEditor extends HTMLElement {
           <div class="hx-scroll"><div class="hx-rows"></div><div class="hx-spacer"></div></div>
           <textarea class="hx-input" aria-label="Hex editor" spellcheck="false" autocomplete="off"></textarea>
         </div>
+        <textarea class="hx-text" aria-label="Text" spellcheck="false" autocomplete="off" hidden></textarea>
         <div class="hx-inspector">
           <h4><span class="hx-insp-at"></span><label><input type="checkbox" class="hx-be"> Big-endian</label></h4>
           <table><tbody></tbody></table>
@@ -231,6 +254,7 @@ export class HexEditor extends HTMLElement {
     this.rowsEl = $('.hx-rows');
     this.spacer = $('.hx-spacer');
     this.input = $('.hx-input');
+    this.text = $('.hx-text');
     this.status = $('.hx-status');
 
     // The column header, and the inspector's rows
@@ -256,7 +280,13 @@ export class HexEditor extends HTMLElement {
     // Toolbar
     this.querySelector('.hx-toolbar').addEventListener('click', ev => this.command(ev.target.closest('button')?.dataset.cmd));
     $('.hx-tools button').addEventListener('click', () => this.fill());
-    $('.hx-cp437').addEventListener('change', ev => { this.cp437 = ev.target.checked; this.render(); });
+    $('.hx-cp437').addEventListener('change', ev => {
+      this.cursorFromText();
+      this.cp437 = ev.target.checked;
+      this.showText();
+      this.render();
+    });
+    $('.hx-wrap-lines').addEventListener('change', ev => this.text.classList.toggle('hx-wrap', ev.target.checked));
     $('.hx-be').addEventListener('change', ev => { this.bigEndian = ev.target.checked; this.renderInspector(); this.search(); });
     let goto = $('.hx-goto');
     goto.addEventListener('keydown', ev => {
@@ -295,6 +325,10 @@ export class HexEditor extends HTMLElement {
     this.input.addEventListener('copy', ev => this.onCopy(ev, false));
     this.input.addEventListener('cut', ev => this.onCopy(ev, true));
     this.input.addEventListener('paste', ev => this.onPaste(ev));
+    // The text view
+    this.text.addEventListener('input', () => this.onTextInput());
+    this.text.addEventListener('keydown', ev => this.onTextKey(ev));
+    for (let type of ['keyup', 'mouseup', 'focus']) this.text.addEventListener(type, () => this.renderStatus());
 
     this.resizeObserver = new ResizeObserver(() => this.layout());
     this.resizeObserver.observe(this.scroller);
@@ -311,8 +345,9 @@ export class HexEditor extends HTMLElement {
 
   /* Show `bytes` (the editor keeps its own copy). Options: name (for downloads),
      compare and compareLabel (a version to mark differences from, e.g. the original;
-     shown from the start if `showCompare`), readOnly. */
-  open(bytes, { name = 'file.bin', compare = null, compareLabel = 'The original', showCompare = false, readOnly = false } = {}) {
+     shown from the start if `showCompare`), readOnly, and view ('hex' or 'text'; by
+     default, text if it looks like text). */
+  open(bytes, { name = 'file.bin', compare = null, compareLabel = 'The original', showCompare = false, readOnly = false, view = null } = {}) {
     this.data = new Uint8Array(bytes);
     this.saved = this.data.slice();
     this.dirty = new Uint8Array(this.data.length);
@@ -332,9 +367,12 @@ export class HexEditor extends HTMLElement {
     this.updateCompareSelect();
     if (compare && showCompare) this.chooseCompare('given');
     this.search();
-    this.layout();
+    this.eol = HexEditor.lineEnding(this.data);
+    this.viewMode = null; // (nothing of this file's shown yet, nor a caret to keep)
+    let text = this.data.length <= TEXT_MAX && HexEditor.looksLikeText(this.data);
+    this.setView(view || (text ? 'text' : 'hex'));
     this.scroller.scrollTop = 0;
-    this.render();
+    this.text.scrollTop = this.text.scrollLeft = 0;
     this.emitModified();
   }
   get modified() { return this.undoStack.length !== this.savedAt; }
@@ -398,12 +436,20 @@ export class HexEditor extends HTMLElement {
   /* ----- Editing ----- */
 
   /* Replace `count` bytes at `at` with `bytes`: every edit goes through here, so it
-     can be undone. `merge` folds it into the last edit, if that was at the same place
-     (the second hex digit typed into a byte). */
+     can be undone. `merge` folds it into the last edit: true if that was at the same
+     place (the second hex digit typed into a byte), or 'after' to add to the bytes it
+     put in, if this adds right after them (text typed on in the text view). */
   splice(at, count, bytes, merge = false) {
     if (this.readOnly) return;
     let last = this.undoStack[this.undoStack.length - 1];
-    if (merge && last && last.at == at && last.inserted.length == bytes.length && count == bytes.length && this.undoStack.length != this.savedAt) {
+    let unsaved = last && this.undoStack.length != this.savedAt && !this.redoStack.length;
+    if (merge == 'after' && unsaved && count == 0 && last.at + last.inserted.length == at) {
+      this.apply(at, 0, bytes, new Uint8Array(bytes.length).fill(1));
+      let inserted = new Uint8Array(last.inserted.length + bytes.length);
+      inserted.set(last.inserted);
+      inserted.set(bytes, last.inserted.length);
+      last.inserted = inserted;
+    } else if (merge === true && last && last.at == at && last.inserted.length == bytes.length && count == bytes.length && this.undoStack.length != this.savedAt) {
       this.data.set(bytes, at);
       this.dirty.fill(1, at, at + bytes.length);
       last.inserted = bytes.slice();
@@ -455,6 +501,8 @@ export class HexEditor extends HTMLElement {
   }
   /* After the bytes change */
   changed() {
+    // (Unless they changed by typing there, the text view shows them afresh)
+    if (!this.typingText) this.showText();
     this.cursor = Math.min(this.cursor, this.maxCursor);
     this.layout();
     if (this.querySelector('.hx-find').value) this.search(false);
@@ -594,7 +642,7 @@ export class HexEditor extends HTMLElement {
     this.ensureVisible(this.cursor);
     this.render();
   }
-  focus() { this.input.focus({ preventScroll: true }); }
+  focus() { (this.viewMode == 'text' ? this.text : this.input).focus({ preventScroll: true }); }
   /* "0x1A0", "1A0h", "$1A0", "1a0" (hex, having a letter), "416" (decimal), "+16", "-0x10" */
   parseOffset(text) {
     let m = text.trim().match(/^([+-]?)\s*(0x[0-9a-f]+|\$[0-9a-f]+|[0-9a-f]+h|[0-9]*[a-f][0-9a-f]*|[0-9]+)$/i);
@@ -704,6 +752,8 @@ export class HexEditor extends HTMLElement {
       case 'findprev': this.findNext(-1); break;
       case 'diffnext': this.findDifference(1); break;
       case 'diffprev': this.findDifference(-1); break;
+      case 'view-hex': this.setView('hex'); break;
+      case 'view-text': this.setView('text'); break;
       case 'mode':
         this.insert = !this.insert;
         this.querySelector('.hx-mode').textContent = this.insert ? 'Insert' : 'Overwrite';
@@ -856,6 +906,130 @@ export class HexEditor extends HTMLElement {
     return count;
   }
 
+  /* ----- The text view ----- */
+
+  /* Whether bytes are most likely text: no zero bytes, and few other control
+     characters besides tabs, line breaks, form feeds and DOS's end-of-file mark */
+  static looksLikeText(bytes) {
+    let sample = bytes.subarray(0, 65536), odd = 0;
+    for (let b of sample) {
+      if (b == 0) return false;
+      if (b < 0x20 && b != 9 && b != 10 && b != 12 && b != 13 && b != 0x1a) odd++;
+    }
+    return odd <= sample.length / 100;
+  }
+  /* The line ending the text uses most: DOS's CR LF (also when it has none), or LF */
+  static lineEnding(bytes) {
+    let crlf = 0, lf = 0;
+    for (let i = 0; i < bytes.length; i++) {
+      if (bytes[i] == 10) bytes[i - 1] == 13 ? crlf++ : lf++;
+    }
+    return lf > crlf ? '\n' : '\r\n';
+  }
+  /* Bytes as text, and back. Each line ending is a line break; tabs are tabs; any other
+     byte is one character (one that stands for it, if it isn't text), so the text
+     always turns back into the same bytes. */
+  textOf(bytes) {
+    let crlf = this.eol == '\r\n', out = [];
+    for (let i = 0; i < bytes.length; i++) {
+      let b = bytes[i];
+      if (crlf && b == 13 && bytes[i + 1] == 10) { out.push('\n'); i++; }
+      else if (!crlf && b == 10) out.push('\n');
+      else if (b == 9) out.push('\t');
+      else out.push(this.textChar(b));
+    }
+    return out.join('');
+  }
+  bytesOf(text) {
+    let out = new Uint8Array(text.length * 2), n = 0;
+    for (let ch of text) {
+      if (ch == '\n') { if (this.eol == '\r\n') out[n++] = 13; out[n++] = 10; }
+      else if (ch == '\t') out[n++] = 9;
+      else out[n++] = this.textByte(ch);
+    }
+    return out.slice(0, n);
+  }
+  /* One byte's character: as DOS draws it, or Latin-1, with the control characters
+     as their symbols (␀ to ␟, and ␡) */
+  textChar(b) {
+    if (b == 0) return '␀'; // (DOS draws it as a space)
+    if (this.cp437) return CP437[b];
+    if (b < 0x20) return String.fromCharCode(0x2400 + b);
+    return b == 0x7f ? '␡' : String.fromCharCode(b);
+  }
+  textByte(ch) {
+    let code = ch.codePointAt(0);
+    if (code >= 0x2400 && code < 0x2420) return code - 0x2400;
+    if (ch == '␡') return 0x7f;
+    if (this.cp437) return CP437_BYTE.get(ch) ?? 0x3f;
+    return code < 256 ? code : 0x3f; // (what doesn't fit in a byte becomes "?")
+  }
+  /* Show the bytes in hex or as text, keeping the cursor's place */
+  setView(view) {
+    if (view == 'text' && this.data.length > TEXT_MAX) {
+      this.flash(`Too big to show as text (over ${TEXT_MAX / 1048576} MB)`, true);
+      view = 'hex';
+    }
+    let was = this.viewMode;
+    this.cursorFromText();
+    this.viewMode = view;
+    this.querySelector('.hx-view').hidden = view != 'hex';
+    this.querySelector('.hx-inspector').hidden = view != 'hex';
+    this.text.hidden = view != 'text';
+    this.text.readOnly = this.readOnly;
+    this.showText();
+    this.layout();
+    if (view == 'hex') this.ensureVisible(this.cursor);
+    this.render();
+    if (was != view && this.contains(document.activeElement)) this.focus();
+  }
+  /* Move the cursor to the text view's caret */
+  cursorFromText() {
+    if (this.viewMode != 'text') return;
+    let before = this.text.value.slice(0, this.text.selectionStart);
+    this.cursor = Math.min(this.bytesOf(before).length, this.maxCursor);
+    this.anchor = null;
+    this.nibble = 0;
+  }
+  /* Put the bytes in the text view, with the caret at the cursor */
+  showText() {
+    if (this.viewMode != 'text') return;
+    this.text.value = this.textOf(this.data);
+    let pos = this.textOf(this.data.subarray(0, this.cursor)).length;
+    this.text.setSelectionRange(pos, pos);
+  }
+  /* The text was edited: make the same change to the bytes, as an edit to undo */
+  onTextInput() {
+    let next = this.bytesOf(this.text.value), d = this.data;
+    let start = 0, end = 0, max = Math.min(d.length, next.length);
+    while (start < max && d[start] == next[start]) start++;
+    while (end < max - start && d[d.length - 1 - end] == next[next.length - 1 - end]) end++;
+    let added = next.slice(start, next.length - end), removed = d.length - start - end;
+    // Typing on soon after is the same edit, to undo together
+    let now = Date.now(), merge = removed == 0 && now - (this.typedAt || 0) < 1000 ? 'after' : false;
+    this.typedAt = now;
+    this.cursor = start + added.length;
+    this.typingText = true;
+    try { this.splice(start, removed, added, merge); }
+    finally { this.typingText = false; }
+  }
+  onTextKey(ev) {
+    let ctrl = ev.ctrlKey || ev.metaKey, k = ev.key.toLowerCase();
+    // (The machine's keyboard handlers aren't to see typing here)
+    ev.stopPropagation();
+    if (ctrl && !ev.altKey && (k == 'z' || k == 'y' || k == 's')) {
+      // Undo and redo are the editor's, shared with the hex view
+      ev.preventDefault();
+      if (k == 's') this.save();
+      else if (k == 'y' || ev.shiftKey) this.redo();
+      else this.undo();
+    } else if (ev.key == 'Tab' && !ctrl && !ev.altKey && !ev.shiftKey && !this.readOnly) {
+      ev.preventDefault();
+      this.text.setRangeText('\t', this.text.selectionStart, this.text.selectionEnd, 'end');
+      this.onTextInput();
+    }
+  }
+
   /* ----- Drawing ----- */
 
   /* Fit the rows to the space there is. Very long files would make the scrolling area
@@ -960,7 +1134,11 @@ export class HexEditor extends HTMLElement {
     q('[data-cmd="save"]').hidden = !this.onsave || this.readOnly;
     q('[data-cmd="save"]').disabled = !this.modified;
     q('[data-cmd="revert"]').disabled = !this.modified;
-    q('.hx-mode').hidden = this.readOnly;
+    q('.hx-mode').hidden = this.readOnly || this.viewMode != 'hex';
+    for (let el of this.querySelectorAll('.hx-hex-only:not(.hx-mode)')) el.hidden = this.viewMode != 'hex';
+    for (let el of this.querySelectorAll('.hx-text-only')) el.hidden = this.viewMode != 'text';
+    for (let b of this.querySelectorAll('.hx-views button')) b.setAttribute('aria-pressed', b.dataset.cmd == 'view-' + this.viewMode);
+    q('[data-cmd="view-text"]').disabled = this.data.length > TEXT_MAX;
     let differences = this.compare && this.countDifferences();
     q('.hx-diff-count').textContent = !this.compare ? '' : differences ? differences.toLocaleString() + ' bytes differ' : 'Same';
     for (let b of this.querySelectorAll('[data-cmd^="diff"]')) b.disabled = !this.compare;
@@ -985,13 +1163,19 @@ export class HexEditor extends HTMLElement {
     }
   }
   renderStatus() {
-    let at = this.cursor, n = this.data.length, sel = this.selection;
-    let parts = [`Offset <b>${hex(at, 6)}</b> (${at.toLocaleString()})`];
-    if (at < n) parts.push(`Byte <b>${hex(this.data[at])}</b> = ${this.data[at]}`);
-    if (sel) parts.push(`Selected <b>${(sel.end - sel.start).toLocaleString()}</b> bytes (${hex(sel.start, 6)}–${hex(sel.end - 1, 6)})`);
+    let at = this.cursor, n = this.data.length, sel = this.selection, parts;
+    if (this.viewMode == 'text') {
+      let before = this.text.value.slice(0, this.text.selectionStart), line = before.split('\n');
+      parts = [`Line <b>${line.length.toLocaleString()}</b>, column <b>${line[line.length - 1].length + 1}</b>`,
+        this.eol == '\r\n' ? 'DOS line endings (CR LF)' : 'Unix line endings (LF)'];
+    } else {
+      parts = [`Offset <b>${hex(at, 6)}</b> (${at.toLocaleString()})`];
+      if (at < n) parts.push(`Byte <b>${hex(this.data[at])}</b> = ${this.data[at]}`);
+      if (sel) parts.push(`Selected <b>${(sel.end - sel.start).toLocaleString()}</b> bytes (${hex(sel.start, 6)}–${hex(sel.end - 1, 6)})`);
+    }
     let grown = n - this.saved.length;
     parts.push(`Size ${n.toLocaleString()} bytes` + (grown ? ` <span class="hx-warn">(${grown > 0 ? '+' : ''}${grown.toLocaleString()} since saved)</span>` : ''));
-    if (!this.readOnly) parts.push(this.insert ? 'Insert' : 'Overwrite');
+    if (!this.readOnly && this.viewMode == 'hex') parts.push(this.insert ? 'Insert' : 'Overwrite');
     if (this.readOnly) parts.push('Read only');
     else if (this.modified) parts.push('<span class="hx-warn">Unsaved changes</span>');
     if (this.message) parts.push(this.message.warn ? `<span class="hx-warn">${this.message.text.replace(/</g, '&lt;')}</span>` : `<b>${this.message.text.replace(/</g, '&lt;')}</b>`);
