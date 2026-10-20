@@ -1,5 +1,7 @@
 import { BaseClass } from '../baseclass.js'
 import { VirtualFile } from '../fs/virtualfile.js'
+import { ActivityReporter } from './activity.js'
+import { PerformanceMeter } from './performance-meter.js'
 
 let canvasID = 0;
 export class BaseEmulator extends BaseClass {
@@ -31,6 +33,7 @@ export class BaseEmulator extends BaseClass {
   onprerun = null
   oncanvaschange = null
   onrun = null
+  pixelScaling = false  // crisp (nearest-neighbour) pixels when enlarged; see trackPixelScaling
 
   constructor(settings) {
     super();
@@ -38,6 +41,20 @@ export class BaseEmulator extends BaseClass {
     this.running = false;
     this.settings = settings;
     this.extraargs = [] ;
+    // Drive lights and the like: see activity.js
+    this.activity = new ActivityReporter(this);
+    // CPU graphs and the like: see performance-meter.js
+    this.meter = new PerformanceMeter(this);
+    this.addEventListener('run', () => this.meter.start());
+    this.addEventListener('exit', () => this.meter.stop());
+  }
+  /* What performance-meter.js measures for this emulator */
+  get performanceMetrics() {
+    return this.meter.metrics.map(m => ({ ...m }));
+  }
+  /* The devices whose activity this emulator reports (see activity.js) */
+  get activityDevices() {
+    return this.activity.devices.map(d => ({ ...d }));
   }
   connectedCallback() {
     if (!this.settings) this.settings = {};
@@ -50,6 +67,8 @@ export class BaseEmulator extends BaseClass {
     if (this.onprerun) this.addEventListener('prerun', ev => new Function(this.onprerun).call(this, ev));
     if (this.onrun) this.addEventListener('run', ev => new Function(this.onrun).call(this, ev));
     if (this.oncanvaschange) this.addEventListener('canvaschange', ev => new Function(this.oncanvaschange).call(this, ev));
+
+    if (this.pixelScaling) this.addEventListener('canvaschange', ev => this.trackPixelScaling(ev.detail));
 
     this.dispatchEvent(new CustomEvent('create'));
     this.lockKeyboardInFullscreen();
@@ -84,6 +103,30 @@ export class BaseEmulator extends BaseClass {
     this.onFullscreenChange = null;
     if (this.keyboardLocked) navigator.keyboard.unlock();
     this.keyboardLocked = false;
+    if (this.pixelObservers) this.pixelObservers.forEach(o => o.disconnect());
+    this.pixelObservers = null;
+    this.activity.stop();
+    this.meter.stop();
+  }
+  /* Low-res output (DOS games at 320x200) is shown enlarged, and looks best enlarged with
+     its pixels kept square and sharp; smoothing would blur it. Shrunk, though, sharp
+     scaling drops whole rows and columns, so it's only used while the picture is shown
+     at least at its own size (in device pixels). The canvas gets the "pixelated" class
+     while it is; it's checked whenever its shown size or its resolution changes. */
+  trackPixelScaling(canvas) {
+    if (this.pixelObservers) this.pixelObservers.forEach(o => o.disconnect());
+    if (!canvas) return;
+    let update = () => {
+      let box = canvas.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+      // With object-fit: contain (fullscreen), the picture is shown at the smaller scale
+      let scale = Math.min(box.width / canvas.width, box.height / canvas.height) * dpr;
+      canvas.classList.toggle('pixelated', scale >= 1);
+    };
+    let resized = new ResizeObserver(update), changed = new MutationObserver(update);
+    resized.observe(canvas);
+    changed.observe(canvas, { attributes: true, attributeFilter: ['width', 'height'] });
+    this.pixelObservers = [resized, changed];
+    update();
   }
   loadSettingsFromAttributes() {
     let properties = Object.getOwnPropertyNames(this);
@@ -252,7 +295,7 @@ export class BaseEmulator extends BaseClass {
       // but they all honor instantiateWasm - feed them the prefetched binary
       module.instantiateWasm = (imports, done) => {
         WebAssembly.instantiate(module.wasmBinary, imports)
-          .then(out => done(out.instance, out.module))
+          .then(out => done(this.meter.timeExports(out.instance), out.module))
           .catch(e => console.error('Emularity: wasm instantiation failed', e));
         return {};
       };
@@ -560,6 +603,8 @@ export class BaseEmulator extends BaseClass {
     //this.module.FS.PATH = this.module.PATH;
     self.Module = this.module;
 
+    this.activity.watchFiles(fs, path => this.activityDeviceForPath(path));
+
     BrowserFS.initialize(this.bfs);
     let emscriptenfs = new BrowserFS.EmscriptenFS();
     emscriptenfs.FS = fs;
@@ -591,6 +636,10 @@ export class BaseEmulator extends BaseClass {
       }
     });
 
+  }
+  /* Which device (see activity.js) reading or writing this file counts as, if any */
+  activityDeviceForPath(path) {
+    return null;
   }
   getFiles() {
     let files = [];
