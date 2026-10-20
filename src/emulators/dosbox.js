@@ -6,6 +6,8 @@ export class DOSBoxEmulator extends BaseEmulator {
   wasmscript = 'dosbox.module.js'
   wasminit = 'createDOSBox'
   media = []  // disk images: [{ drive: 'fda'|'fdb'|'cdrom', id, name, blob | url }]
+  mounted = {}   // each drive's disks, once mounted at boot: { fda: [medium, ...] }
+  position = {}  // each drive's current disk, as an index into mounted: { fda: 0 }
   pixelScaling = true
 
   /* Removable-media drives. Every image for a drive is mounted at boot (IMGMOUNT
@@ -179,7 +181,7 @@ export class DOSBoxEmulator extends BaseEmulator {
 
   get mediaDrives() {
     return Object.entries(DOSBoxEmulator.DRIVES).map(([id, d]) => {
-      let disks = (this.mounted && this.mounted[id]) || [];
+      let disks = this.mounted[id] || [];
       let current = disks[this.position[id]];
       return { id, label: d.label, kind: d.kind, canEject: false, disks: disks.map(m => m.id),
         current: current ? { id: current.id, name: current.name } : null };
@@ -188,7 +190,7 @@ export class DOSBoxEmulator extends BaseEmulator {
   /* Swap a drive to one of its disks. Ctrl+F4 moves every multi-disk drive on to its
      next disk, so others may change too. */
   async insertMedia(drive, m) {
-    let disks = (this.mounted && this.mounted[drive]) || [];
+    let disks = this.mounted[drive] || [];
     let index = disks.findIndex(d => d.id == m.id);
     if (index < 0) {
       let err = new Error(`${m.name} will be in ${DOSBoxEmulator.DRIVES[drive] ? DOSBoxEmulator.DRIVES[drive].label : drive} after a restart`);
