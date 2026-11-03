@@ -21,12 +21,20 @@
    shown as symbols that stand for them (as DOS draws them, or as ␀, ␛ and the like), so
    nothing is lost either way. Edits there share the hex view's undo, save and changes.
 
+   The changes view lines the file up against the version it's compared with and shows
+   what was removed and added: as lines, for text, or as rows of bytes in hex (where
+   bytes that changed in place are picked out). Clicking a line goes to it.
+
    Only the rows on screen are drawn, so big files scroll as fast as small ones.
    Emits 'modifiedchange' when the bytes become different from (or the same as) the
    last saved ones. */
 
 const ROW = 16;
 const TEXT_MAX = 8 * 1048576; // bigger files only get the hex view
+const DIFF_CONTEXT = 3;       // unchanged lines shown around each change
+const DIFF_MAX_EDITS = 2000;  // beyond this many, the versions aren't lined up...
+const DIFF_MAX_WORK = 3e7;    // ...nor when that takes this many steps (a fraction of a second)
+const DIFF_MAX_ROWS = 5000;   // the most rows the changes view shows
 
 /* Code page 437: what DOS draws for each byte */
 const CP437 = [...(
@@ -44,6 +52,79 @@ function parseInteger(text) {
   if (!m) return null;
   let v = BigInt(m[2].replace('$', '0x'));
   return m[1] ? -v : v;
+}
+
+/* How sequence a (of numbers) turns into b: runs of { type: 'same' | 'del' | 'add', a, b,
+   len }, where a and b are where the run starts in each. Changes between two unchanged
+   runs are a 'del' (if any) then an 'add' (if any). This is Myers' diff, on what's left
+   once the start and end they share are set aside; with more than maxEdits removed and
+   added (or too much work), it gives up on lining them up, and the middle is one change
+   (aligned: false). */
+function diffRuns(a, b, maxEdits = DIFF_MAX_EDITS) {
+  let n = a.length, m = b.length, head = 0, tail = 0;
+  while (head < n && head < m && a[head] == b[head]) head++;
+  while (tail < n - head && tail < m - head && a[n - 1 - tail] == b[m - 1 - tail]) tail++;
+  let steps = myers(a, b, head, n - tail, head, m - tail, maxEdits);
+  let aligned = steps != null;
+  // (Not lined up: all of the one middle, then all of the other)
+  if (!steps) steps = 'd'.repeat(n - tail - head) + 'a'.repeat(m - tail - head);
+  let runs = [], i = 0, j = 0;
+  let push = (type, at, bt, len) => {
+    let last = runs[runs.length - 1];
+    if (!len) return;
+    if (last && last.type == type) last.len += len;
+    else runs.push({ type, a: at, b: bt, len });
+  };
+  let flush = () => {
+    if (i > 0 || j > 0) { push('del', ai - i, bj - j, i); push('add', ai, bj - j, j); }
+    i = j = 0;
+  };
+  let ai = head, bj = head;
+  push('same', 0, 0, head);
+  for (let step of steps) {
+    if (step == 's') { flush(); push('same', ai, bj, 1); ai++; bj++; }
+    else if (step == 'd') { i++; ai++; }
+    else { j++; bj++; }
+  }
+  flush();
+  push('same', n - tail, m - tail, tail);
+  runs.aligned = aligned;
+  return runs;
+}
+/* The steps from a[a0, a1) to b[b0, b1): 's' (same), 'd' (delete one of a's), 'a' (add
+   one of b's), or null if it takes more than maxEdits (or DIFF_MAX_WORK). Each round d
+   keeps, for each diagonal k = x - y in -d..d, how far along a (x) the best path with d
+   edits gets. */
+function myers(a, b, a0, a1, b0, b1, maxEdits) {
+  let n = a1 - a0, m = b1 - b0, off = maxEdits + 1, work = 0;
+  let v = new Int32Array(2 * maxEdits + 3), rounds = [];
+  for (let d = 0; d <= maxEdits; d++) {
+    for (let k = -d; k <= d; k += 2) {
+      let x = k == -d || (k != d && v[off + k - 1] < v[off + k + 1]) ? v[off + k + 1] : v[off + k - 1] + 1;
+      let y = x - k, from = x;
+      while (x < n && y < m && a[a0 + x] == b[b0 + y]) { x++; y++; }
+      if ((work += x - from + 1) > DIFF_MAX_WORK) return null;
+      v[off + k] = x;
+      if (x >= n && y >= m) {
+        // Done: walk back through the rounds to find the path
+        rounds.push(v.slice(off - d - 1, off + d + 2));
+        let steps = [];
+        for (let e = d; e > 0; e--) {
+          let prev = rounds[e - 1], at = kk => prev[kk + e]; // (round e-1 kept -e..e)
+          let kk = x - y;
+          let down = kk == -e || (kk != e && at(kk - 1) < at(kk + 1));
+          let pk = down ? kk + 1 : kk - 1, px = at(pk), py = px - pk;
+          while (x > px + (down ? 0 : 1) && y > py + (down ? 1 : 0)) { steps.push('s'); x--; y--; }
+          steps.push(down ? 'a' : 'd');
+          x = px; y = py;
+        }
+        while (x > 0 && y > 0) { steps.push('s'); x--; y--; }
+        return steps.reverse().join('');
+      }
+    }
+    rounds.push(v.slice(off - d - 1, off + d + 2));
+  }
+  return null;
 }
 
 /* The numbers the inspector shows: [label, bytes, DataView type] */
@@ -130,6 +211,28 @@ emularity-hex-editor input[type="checkbox"] { padding: 0; }
   color: #ddd; background: #0b0b0b; white-space: pre; overflow: auto; tab-size: 8;
 }
 .hx-root.hx-root textarea.hx-text.hx-wrap { white-space: pre-wrap; overflow-wrap: anywhere; }
+.hx-changes {
+  flex: 1; min-width: 0; min-height: 0; overflow: auto; outline: none; padding: .3em 0; background: #0b0b0b;
+  font: 13px/1.5 ui-monospace, Consolas, 'DejaVu Sans Mono', 'Liberation Mono', monospace;
+  --hx-num: 7ch;
+}
+.hx-changes.hx-changes-hex { --hx-num: 9ch; }
+.hx-changes-note { padding: .8em 1em; color: #999; font: 13px/1.5 system-ui, sans-serif; white-space: normal; }
+.hx-dl { display: flex; white-space: pre; min-width: max-content; }
+.hx-dl[data-at] { cursor: pointer; }
+.hx-dl[data-at]:hover { background: #1c1c1c; }
+.hx-dn { flex: none; width: var(--hx-num); padding-right: 1ch; text-align: right; color: #556; user-select: none; }
+.hx-ds { flex: none; width: 2ch; text-align: center; color: #667; user-select: none; }
+.hx-dt { padding-right: 1ch; tab-size: 8; }
+.hx-dl-del { background: rgba(255, 70, 70, .13); }
+.hx-dl-del .hx-ds { color: #ff8080; }
+.hx-dl-add { background: rgba(70, 200, 110, .13); }
+.hx-dl-add .hx-ds { color: #6ddc8f; }
+.hx-dl-del[data-at]:hover { background: rgba(255, 70, 70, .22); }
+.hx-dl-add[data-at]:hover { background: rgba(70, 200, 110, .22); }
+.hx-dl-del mark { background: rgba(255, 70, 70, .5); color: inherit; }
+.hx-dl-add mark { background: rgba(70, 200, 110, .5); color: inherit; }
+.hx-dl-gap { margin: .2em 0; padding: .1em 0 .1em calc(var(--hx-num) * 2 + 4ch); color: #667; background: #111; font: 12px/1.6 system-ui, sans-serif; }
 .hx-status { padding: .25em .6em; border-top: 1px solid #2a2a2a; color: #999; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: #111; }
 .hx-status b { color: #ddd; font-weight: normal; }
 .hx-status .hx-warn { color: #ffcf5c; }
@@ -158,7 +261,8 @@ export class HexEditor extends HTMLElement {
   cursor = 0;                 // may be data.length: the place to add bytes at the end
   nibble = 0;                 // in the hex column: 1 once the high digit has been typed
   pane = 'hex';               // the column typed into: 'hex' or 'text'
-  viewMode = 'hex';           // shown as 'hex' (with characters beside), or as 'text'
+  viewMode = 'hex';           // shown as 'hex' (with characters beside), 'text', or 'changes'
+  changesAs = null;           // the changes view's 'text' (lines) or 'hex' (bytes), once chosen
   eol = '\r\n';               // in the text view, the line ending that makes a line
   anchor = null;              // the selection's other end (inclusive), or null for none
   insert = false;
@@ -186,13 +290,18 @@ export class HexEditor extends HTMLElement {
         <span class="hx-group hx-views" role="group" aria-label="View">
           <button data-cmd="view-hex" title="The bytes in hex, with their characters beside them">Hex</button>
           <button data-cmd="view-text" title="The file as text">Text</button>
+          <button data-cmd="view-changes" title="What's different from another version of the file, such as the original">Changes</button>
+        </span>
+        <span class="hx-group hx-views hx-changes-as" data-views="changes" role="group" aria-label="Changes as">
+          <button data-cmd="changes-text" title="Line by line">Lines</button>
+          <button data-cmd="changes-hex" title="Byte by byte, in hex">Bytes</button>
         </span>
         <span class="hx-group">
           <button data-cmd="undo" title="Undo (Ctrl+Z)">↶</button>
           <button data-cmd="redo" title="Redo (Ctrl+Y)">↷</button>
         </span>
-        <label class="hx-hex-only" title="An offset: 0x1A0, 1A0h or $1A0 are hex, 416 is decimal; +10 or -0x10 move from the cursor">Go to <input type="text" class="hx-goto" placeholder="0x0"></label>
-        <span class="hx-group hx-hex-only">
+        <label data-views="hex" title="An offset: 0x1A0, 1A0h or $1A0 are hex, 416 is decimal; +10 or -0x10 move from the cursor">Go to <input type="text" class="hx-goto" placeholder="0x0"></label>
+        <span class="hx-group" data-views="hex">
           <select class="hx-find-mode" title="What to look for">
             <option value="text">Text</option>
             <option value="itext">Text, any case</option>
@@ -206,16 +315,16 @@ export class HexEditor extends HTMLElement {
           <button data-cmd="findnext" title="Next match (F3)">▶</button>
           <span class="hx-find-count"></span>
         </span>
-        <span class="hx-group hx-hex-only">
-          <select class="hx-compare" title="Mark the bytes that differ from another version of the file"></select>
-          <button data-cmd="diffprev" title="Previous difference (Alt+↑)">◀</button>
-          <button data-cmd="diffnext" title="Next difference (Alt+↓)">▶</button>
-          <span class="hx-diff-count"></span>
+        <span class="hx-group" data-views="hex changes">
+          <select class="hx-compare" title="Another version of the file, to see what's different from it"></select>
+          <button data-cmd="diffprev" data-views="hex" title="Previous difference (Alt+↑)">◀</button>
+          <button data-cmd="diffnext" data-views="hex" title="Next difference (Alt+↓)">▶</button>
+          <span class="hx-diff-count" data-views="hex"></span>
         </span>
         <span class="hx-grow"></span>
         <span class="hx-group">
-          <label class="hx-text-only" title="Wrap long lines to fit"><input type="checkbox" class="hx-wrap-lines"> Wrap</label>
-          <button data-cmd="mode" class="hx-mode hx-hex-only" title="Whether typing replaces bytes or inserts new ones (Insert key)">Overwrite</button>
+          <label data-views="text" title="Wrap long lines to fit"><input type="checkbox" class="hx-wrap-lines"> Wrap</label>
+          <button data-cmd="mode" class="hx-mode" data-views="hex" title="Whether typing replaces bytes or inserts new ones (Insert key)">Overwrite</button>
           <label title="Show bytes as DOS draws them (code page 437), or as plain ASCII"><input type="checkbox" class="hx-cp437" checked> DOS characters</label>
         </span>
         <span class="hx-group">
@@ -231,6 +340,7 @@ export class HexEditor extends HTMLElement {
           <textarea class="hx-input" aria-label="Hex editor" spellcheck="false" autocomplete="off"></textarea>
         </div>
         <textarea class="hx-text" aria-label="Text" spellcheck="false" autocomplete="off" hidden></textarea>
+        <div class="hx-changes" tabindex="0" aria-label="Changes" hidden></div>
         <div class="hx-inspector">
           <h4><span class="hx-insp-at"></span><label><input type="checkbox" class="hx-be"> Big-endian</label></h4>
           <table><tbody></tbody></table>
@@ -255,6 +365,7 @@ export class HexEditor extends HTMLElement {
     this.spacer = $('.hx-spacer');
     this.input = $('.hx-input');
     this.text = $('.hx-text');
+    this.changes = $('.hx-changes');
     this.status = $('.hx-status');
 
     // The column header, and the inspector's rows
@@ -284,6 +395,7 @@ export class HexEditor extends HTMLElement {
       this.cursorFromText();
       this.cp437 = ev.target.checked;
       this.showText();
+      this.showChanges();
       this.render();
     });
     $('.hx-wrap-lines').addEventListener('change', ev => this.text.classList.toggle('hx-wrap', ev.target.checked));
@@ -329,6 +441,11 @@ export class HexEditor extends HTMLElement {
     this.text.addEventListener('input', () => this.onTextInput());
     this.text.addEventListener('keydown', ev => this.onTextKey(ev));
     for (let type of ['keyup', 'mouseup', 'focus']) this.text.addEventListener(type, () => this.renderStatus());
+    // The changes view: a click goes to that place in the file
+    this.changes.addEventListener('click', ev => {
+      let row = ev.target.closest('.hx-dl[data-at]');
+      if (row && !getSelection().toString()) this.goTo(+row.dataset.at, this.changesAs);
+    });
 
     this.resizeObserver = new ResizeObserver(() => this.layout());
     this.resizeObserver.observe(this.scroller);
@@ -369,6 +486,7 @@ export class HexEditor extends HTMLElement {
     this.search();
     this.eol = HexEditor.lineEnding(this.data);
     this.viewMode = null; // (nothing of this file's shown yet, nor a caret to keep)
+    this.changesAs = null;
     let text = this.data.length <= TEXT_MAX && HexEditor.looksLikeText(this.data);
     this.setView(view || (text ? 'text' : 'hex'));
     this.scroller.scrollTop = 0;
@@ -503,6 +621,7 @@ export class HexEditor extends HTMLElement {
   changed() {
     // (Unless they changed by typing there, the text view shows them afresh)
     if (!this.typingText) this.showText();
+    this.showChanges();
     this.cursor = Math.min(this.cursor, this.maxCursor);
     this.layout();
     if (this.querySelector('.hx-find').value) this.search(false);
@@ -642,7 +761,10 @@ export class HexEditor extends HTMLElement {
     this.ensureVisible(this.cursor);
     this.render();
   }
-  focus() { (this.viewMode == 'text' ? this.text : this.input).focus({ preventScroll: true }); }
+  focus() {
+    let el = { text: this.text, changes: this.changes }[this.viewMode] || this.input;
+    el.focus({ preventScroll: true });
+  }
   /* "0x1A0", "1A0h", "$1A0", "1a0" (hex, having a letter), "416" (decimal), "+16", "-0x10" */
   parseOffset(text) {
     let m = text.trim().match(/^([+-]?)\s*(0x[0-9a-f]+|\$[0-9a-f]+|[0-9a-f]+h|[0-9]*[a-f][0-9a-f]*|[0-9]+)$/i);
@@ -754,6 +876,12 @@ export class HexEditor extends HTMLElement {
       case 'diffprev': this.findDifference(-1); break;
       case 'view-hex': this.setView('hex'); break;
       case 'view-text': this.setView('text'); break;
+      case 'view-changes': this.setView('changes'); break;
+      case 'changes-text': case 'changes-hex':
+        this.changesAs = cmd.slice(8);
+        this.showChanges();
+        this.render();
+        break;
       case 'mode':
         this.insert = !this.insert;
         this.querySelector('.hx-mode').textContent = this.insert ? 'Insert' : 'Overwrite';
@@ -875,6 +1003,7 @@ export class HexEditor extends HTMLElement {
     this.compareKey = key;
     this.compare = key && this.compares[key] ? this.compares[key].bytes : null;
     this.updateCompareSelect();
+    this.showChanges();
     this.render();
   }
   differs(i) {
@@ -929,8 +1058,8 @@ export class HexEditor extends HTMLElement {
   /* Bytes as text, and back. Each line ending is a line break; tabs are tabs; any other
      byte is one character (one that stands for it, if it isn't text), so the text
      always turns back into the same bytes. */
-  textOf(bytes) {
-    let crlf = this.eol == '\r\n', out = [];
+  textOf(bytes, eol = this.eol) {
+    let crlf = eol == '\r\n', out = [];
     for (let i = 0; i < bytes.length; i++) {
       let b = bytes[i];
       if (crlf && b == 13 && bytes[i + 1] == 10) { out.push('\n'); i++; }
@@ -977,7 +1106,11 @@ export class HexEditor extends HTMLElement {
     this.querySelector('.hx-inspector').hidden = view != 'hex';
     this.text.hidden = view != 'text';
     this.text.readOnly = this.readOnly;
+    this.changes.hidden = view != 'changes';
     this.showText();
+    // Changes from the original, unless something else is being compared
+    if (view == 'changes' && !this.compare && this.compares.given) this.chooseCompare('given'); // (which shows them)
+    else this.showChanges();
     this.layout();
     if (view == 'hex') this.ensureVisible(this.cursor);
     this.render();
@@ -1028,6 +1161,206 @@ export class HexEditor extends HTMLElement {
       this.text.setRangeText('\t', this.text.selectionStart, this.text.selectionEnd, 'end');
       this.onTextInput();
     }
+  }
+
+  /* ----- The changes view ----- */
+
+  /* Show the cursor's place, at `at`, in the hex or text view */
+  goTo(at, view) {
+    this.cursor = Math.min(at, this.maxCursor);
+    this.anchor = null;
+    this.nibble = 0;
+    this.setView(view);
+    this.focus();
+    if (view == 'text') {
+      // (Setting the caret doesn't scroll to it)
+      let line = this.text.value.slice(0, this.text.selectionStart).split('\n').length - 1;
+      let height = parseFloat(getComputedStyle(this.text).lineHeight) || 19.5;
+      this.text.scrollTop = Math.max(0, line * height - this.text.clientHeight / 3);
+    }
+  }
+  /* The lines of some bytes, with their line ending (as the text view has it) left off:
+     [{ start, end }] */
+  static lines(bytes, eol) {
+    let lines = [], start = 0, crlf = eol == '\r\n';
+    for (let i = 0; i < bytes.length; i++) {
+      if (bytes[i] != 10 || crlf && bytes[i - 1] != 13) continue;
+      lines.push({ start, end: crlf ? i - 1 : i });
+      start = i + 1;
+    }
+    if (start < bytes.length) lines.push({ start, end: bytes.length });
+    return lines;
+  }
+  /* Draw the changes view: what differs from the version compared with */
+  showChanges() {
+    if (this.viewMode != 'changes') return;
+    let list = this.changes, note = text => {
+      let p = document.createElement('div');
+      p.className = 'hx-changes-note';
+      p.textContent = text;
+      return p;
+    };
+    this.changesSummary = '';
+    if (!this.compare) {
+      list.replaceChildren(note('Choose a version to compare with, under “Compare with…” above.'));
+      return;
+    }
+    let old = this.compare, now = this.data;
+    if (!this.changesAs) {
+      let text = b => b.length <= TEXT_MAX && HexEditor.looksLikeText(b);
+      this.changesAs = text(old) && text(now) ? 'text' : 'hex';
+    }
+    if (this.changesAs == 'text' && (old.length > TEXT_MAX || now.length > TEXT_MAX)) this.changesAs = 'hex';
+    let hexRows = this.changesAs == 'hex';
+    list.classList.toggle('hx-changes-hex', hexRows);
+    let rows = hexRows ? this.byteChangeRows(old, now) : this.lineChangeRows(old, now);
+    list.replaceChildren(...rows);
+    if (!rows.length) list.append(note('No differences.'));
+    if (this.changesNote) list.prepend(note(this.changesNote));
+  }
+  /* The runs of changes, with only `context` of each unchanged run kept around them;
+     the rest becomes a gap */
+  static withContext(runs, context) {
+    let out = [];
+    if (runs.length == 1 && runs[0].type == 'same') return out; // no changes
+    runs.forEach((r, i) => {
+      if (r.type != 'same') { out.push(r); return; }
+      let head = i == 0 ? 0 : context, tail = i == runs.length - 1 ? 0 : context;
+      if (r.len <= head + tail) { out.push(r); return; }
+      if (head) out.push({ type: 'same', a: r.a, b: r.b, len: head });
+      out.push({ type: 'gap', len: r.len - head - tail });
+      if (tail) out.push({ type: 'same', a: r.a + r.len - tail, b: r.b + r.len - tail, len: tail });
+    });
+    return out;
+  }
+  /* A row: old and new line numbers (or offsets), +, - or nothing, then its content.
+     A row with `at` goes there in the file when clicked. */
+  changeRow(type, oldNum, newNum, at, content) {
+    let row = document.createElement('div');
+    row.className = 'hx-dl' + (type == 'same' ? '' : ' hx-dl-' + type);
+    if (at != null) row.dataset.at = at;
+    let cell = (cls, text) => {
+      let el = document.createElement('span');
+      el.className = cls;
+      el.textContent = text;
+      return el;
+    };
+    let body = cell('hx-dt', '');
+    body.append(...content);
+    row.append(cell('hx-dn', oldNum ?? ''), cell('hx-dn', newNum ?? ''), cell('hx-ds', { del: '−', add: '+' }[type] || ''), body);
+    return row;
+  }
+  gapRow(text) {
+    let row = document.createElement('div');
+    row.className = 'hx-dl hx-dl-gap';
+    row.textContent = text;
+    return row;
+  }
+  /* Line by line, each version split at its own line endings */
+  lineChangeRows(old, now) {
+    let oldEol = HexEditor.lineEnding(old), oldLines = HexEditor.lines(old, oldEol), newLines = HexEditor.lines(now, this.eol);
+    let textOf = (bytes, eol, line) => this.textOf(bytes.subarray(line.start, line.end), eol);
+    let oldText = oldLines.map(l => textOf(old, oldEol, l)), newText = newLines.map(l => textOf(now, this.eol, l));
+    // (Lines compared as numbers: the same text, the same number)
+    let ids = new Map(), id = t => ids.get(t) ?? (ids.set(t, ids.size), ids.size - 1);
+    let runs = diffRuns(oldText.map(id), newText.map(id));
+    let removed = 0, added = 0;
+    for (let r of runs) { if (r.type == 'del') removed += r.len; if (r.type == 'add') added += r.len; }
+    let plural = (n, what) => `${n.toLocaleString()} ${what}${n == 1 ? '' : 's'}`;
+    this.changesSummary = removed || added ? `${plural(removed, 'line')} removed, ${plural(added, 'line')} added` : 'No differences in the text';
+    this.changesNote = '';
+    if (oldEol != this.eol) this.changesNote = `The line endings changed too, from ${oldEol == '\r\n' ? 'DOS (CR LF)' : 'Unix (LF)'} to ${this.eol == '\r\n' ? 'DOS (CR LF)' : 'Unix (LF)'}.`;
+    if (!runs.aligned) this.changesNote += ' Too much has changed to line the versions up: shown is everything from the first change to the last.';
+    let rows = [], lineAt = j => j < newLines.length ? newLines[j].start : now.length;
+    for (let r of HexEditor.withContext(runs, DIFF_CONTEXT)) {
+      if (rows.length >= DIFF_MAX_ROWS) { rows.push(this.gapRow('…and more, not shown')); break; }
+      if (r.type == 'gap') { rows.push(this.gapRow(`⋯ ${plural(r.len, 'line')} the same`)); continue; }
+      for (let i = 0; i < r.len && rows.length < DIFF_MAX_ROWS; i++) {
+        if (r.type == 'del') rows.push(this.changeRow('del', r.a + i + 1, null, lineAt(r.b), [oldText[r.a + i]]));
+        else rows.push(this.changeRow(r.type, r.type == 'same' ? r.a + i + 1 : null, r.b + i + 1, lineAt(r.b + i), [newText[r.b + i]]));
+      }
+    }
+    return rows;
+  }
+  /* Byte by byte, in rows of hex: removed bytes then added ones, with the bytes that
+     changed in place picked out. Versions the same size are compared in place (as a
+     saved game changes); otherwise they're lined up. */
+  byteChangeRows(old, now) {
+    let runs;
+    if (old.length == now.length) {
+      runs = [];
+      for (let i = 0; i < now.length;) {
+        let same = old[i] == now[i], j = i;
+        while (j < now.length && (old[j] == now[j]) == same) j++;
+        if (same) runs.push({ type: 'same', a: i, b: i, len: j - i });
+        else runs.push({ type: 'del', a: i, b: i, len: j - i }, { type: 'add', a: j, b: i, len: j - i });
+        i = j;
+      }
+      if (!runs.length) runs.push({ type: 'same', a: 0, b: 0, len: 0 });
+      runs.aligned = true;
+    } else {
+      runs = diffRuns(old, now);
+    }
+    let changed = 0, removed = 0, added = 0;
+    for (let k = 0; k < runs.length; k++) {
+      let r = runs[k], next = runs[k + 1];
+      if (r.type == 'del' && next && next.type == 'add') {
+        let both = Math.min(r.len, next.len);
+        changed += both; removed += r.len - both; added += next.len - both; k++;
+      } else if (r.type == 'del') removed += r.len;
+      else if (r.type == 'add') added += r.len;
+    }
+    let plural = (n, what) => `${n.toLocaleString()} ${what}${n == 1 ? '' : 's'}`;
+    this.changesSummary = [changed && plural(changed, 'byte') + ' changed', removed && plural(removed, 'byte') + ' removed',
+      added && plural(added, 'byte') + ' added'].filter(Boolean).join(', ') || 'No differences';
+    this.changesNote = runs.aligned ? '' : 'Too much has changed to line the versions up: shown is everything from the first change to the last.';
+    let digits = Math.max(old.length, now.length) > 0xffffff ? 8 : 6;
+    // One row of up to ROW bytes, with those that differ from `other` (the row it's
+    // paired with) marked
+    let bytesRow = (type, bytes, other, oldAt, newAt, at) => {
+      let hexParts = [], charParts = [];
+      for (let i = 0; i < ROW; i++) {
+        let b = bytes[i], mark = other && i < bytes.length && other[i] !== b;
+        hexParts.push([i < bytes.length ? hex(b) : '  ', mark], [i == 7 ? '  ' : ' ', false]);
+        if (i < bytes.length) charParts.push([this.charOf(b), mark]);
+      }
+      let content = [], add = ([text, mark]) => {
+        let last = content[content.length - 1];
+        if (last && last.mark == mark) { last.text += text; return; }
+        content.push({ text, mark });
+      };
+      hexParts.forEach(add);
+      add([' ', false]);
+      charParts.forEach(add);
+      let nodes = content.map(({ text, mark }) => {
+        if (!mark) return text;
+        let m = document.createElement('mark');
+        m.textContent = text;
+        return m;
+      });
+      return this.changeRow(type, oldAt == null ? null : hex(oldAt, digits), newAt == null ? null : hex(newAt, digits), at, nodes);
+    };
+    let rows = [], shown = HexEditor.withContext(runs, ROW);
+    for (let k = 0; k < shown.length; k++) {
+      let r = shown[k];
+      if (rows.length >= DIFF_MAX_ROWS) { rows.push(this.gapRow('…and more, not shown')); break; }
+      if (r.type == 'gap') { rows.push(this.gapRow(`⋯ ${plural(r.len, 'byte')} the same`)); continue; }
+      if (r.type == 'same') {
+        for (let i = 0; i < r.len; i += ROW) rows.push(bytesRow('same', now.subarray(r.b + i, r.b + Math.min(r.len, i + ROW)), null, r.a + i, r.b + i, r.b + i));
+        continue;
+      }
+      // Removed bytes and the added ones that take their place, row by row
+      let del = r.type == 'del' ? r : null, ins = r.type == 'add' ? r : shown[k + 1] && shown[k + 1].type == 'add' ? shown[++k] : null;
+      let len = Math.max(del ? del.len : 0, ins ? ins.len : 0);
+      for (let i = 0; i < len && rows.length < DIFF_MAX_ROWS; i += ROW) {
+        let gone = del && i < del.len ? old.subarray(del.a + i, del.a + Math.min(del.len, i + ROW)) : null;
+        let put = ins && i < ins.len ? now.subarray(ins.b + i, ins.b + Math.min(ins.len, i + ROW)) : null;
+        let at = (ins || del).b + (put ? i : 0);
+        if (gone) rows.push(bytesRow('del', gone, put, del.a + i, null, at));
+        if (put) rows.push(bytesRow('add', put, gone, null, ins.b + i, at));
+      }
+    }
+    return rows;
   }
 
   /* ----- Drawing ----- */
@@ -1134,10 +1467,13 @@ export class HexEditor extends HTMLElement {
     q('[data-cmd="save"]').hidden = !this.onsave || this.readOnly;
     q('[data-cmd="save"]').disabled = !this.modified;
     q('[data-cmd="revert"]').disabled = !this.modified;
-    q('.hx-mode').hidden = this.readOnly || this.viewMode != 'hex';
-    for (let el of this.querySelectorAll('.hx-hex-only:not(.hx-mode)')) el.hidden = this.viewMode != 'hex';
-    for (let el of this.querySelectorAll('.hx-text-only')) el.hidden = this.viewMode != 'text';
-    for (let b of this.querySelectorAll('.hx-views button')) b.setAttribute('aria-pressed', b.dataset.cmd == 'view-' + this.viewMode);
+    // What's for which view
+    for (let el of this.querySelectorAll('[data-views]')) el.hidden = !el.dataset.views.split(' ').includes(this.viewMode);
+    if (this.readOnly) q('.hx-mode').hidden = true;
+    if (!this.compare) q('.hx-changes-as').hidden = true;
+    for (let b of this.querySelectorAll('.hx-views button')) {
+      b.setAttribute('aria-pressed', b.dataset.cmd == 'view-' + this.viewMode || b.dataset.cmd == 'changes-' + this.changesAs);
+    }
     q('[data-cmd="view-text"]').disabled = this.data.length > TEXT_MAX;
     let differences = this.compare && this.countDifferences();
     q('.hx-diff-count').textContent = !this.compare ? '' : differences ? differences.toLocaleString() + ' bytes differ' : 'Same';
@@ -1164,7 +1500,10 @@ export class HexEditor extends HTMLElement {
   }
   renderStatus() {
     let at = this.cursor, n = this.data.length, sel = this.selection, parts;
-    if (this.viewMode == 'text') {
+    if (this.viewMode == 'changes') {
+      let c = this.compare && this.compares[this.compareKey];
+      parts = c ? [`Compared with <b>${c.label.replace(/</g, '&lt;')}</b>`, this.changesSummary] : [];
+    } else if (this.viewMode == 'text') {
       let before = this.text.value.slice(0, this.text.selectionStart), line = before.split('\n');
       parts = [`Line <b>${line.length.toLocaleString()}</b>, column <b>${line[line.length - 1].length + 1}</b>`,
         this.eol == '\r\n' ? 'DOS line endings (CR LF)' : 'Unix line endings (LF)'];
