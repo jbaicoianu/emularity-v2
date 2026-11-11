@@ -128,6 +128,11 @@ export class LanTrunk extends WorkerConnection {
     let copy = frame.slice();
     this.port.postMessage(copy.buffer, [copy.buffer]);
   }
+  /* What the other side calls itself, once it says */
+  relabel(label) {
+    this.label = label;
+    if (this.port) this.port.postMessage({ relabel: label });
+  }
   remoteHosts(hosts) {
     this.remote = hosts;
     if (this.port) this.port.postMessage({ remoteHosts: hosts });

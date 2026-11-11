@@ -464,16 +464,22 @@ emularity-keyboard[layout="numpad"] .keyboard-key.Numpad0 {
 .emularity-lan-panel .lan-bridge-message.lan-error {
   color: #e8a54b;
 }
-/* A bridged network on the map: a segment of its own, reached through a tunnel */
+/* Networks on the map: this one, and bridged ones, joined by tunnels */
 .emularity-lan-panel .lan-segment rect {
   fill: rgba(176, 138, 216, .05);
   stroke: #6d5a8a;
   stroke-dasharray: 6 4;
 }
+.emularity-lan-panel .lan-segment-local rect {
+  fill: rgba(90, 184, 200, .04);
+  stroke: #2f5b64;
+}
 .emularity-lan-panel .lan-segment-name {
   fill: #b9a6d6;
   font: bold 11px sans-serif;
-  text-anchor: end;
+}
+.emularity-lan-panel .lan-segment-name-local {
+  fill: #7fb6c2;
 }
 .emularity-lan-panel .lan-segment-empty {
   fill: #777;
@@ -482,13 +488,14 @@ emularity-keyboard[layout="numpad"] .keyboard-key.Numpad0 {
 }
 .emularity-lan-panel .lan-tunnel-pipe {
   stroke: #6d5a8a;
-  stroke-width: 24;
-  stroke-linecap: round;
+  stroke-width: 26;
 }
 .emularity-lan-panel .lan-tunnel-bore {
   stroke: #161220;
-  stroke-width: 20;
-  stroke-linecap: round;
+  stroke-width: 22;
+}
+.emularity-lan-panel .lan-tunnel-port {
+  fill: #6d5a8a;
 }
 .emularity-lan-panel .lan-tunnel-label {
   fill: #b9a6d6;
@@ -498,11 +505,13 @@ emularity-keyboard[layout="numpad"] .keyboard-key.Numpad0 {
 .emularity-lan-panel .lan-tunnel-flow .lan-link {
   stroke: #4a3d5e;
 }
-.emularity-lan-panel .lan-tunnel-end {
-  fill: #b08ad8;
+/* A machine's share of a tunnel's traffic: bands only, no line of its own */
+.emularity-lan-panel .lan-feed .lan-link {
+  display: none;
 }
 .emularity-lan-panel .lan-remote-link {
-  stroke: #6d5a8a;
+  stroke: #4a3d5e;
+  stroke-dasharray: 2 3;
 }
 .emularity-lan-panel .lan-node.lan-remote-node rect {
   fill: #1f1a2a;

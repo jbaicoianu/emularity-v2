@@ -29,7 +29,9 @@ import { ETHERTYPE_ARP, ETHERTYPE_IPV4, PROTO_UDP, DHCP_SERVER_PORT, DHCP_CLIENT
      side's). Only what concerns the machines crosses it (see crossesBridge): each LAN
      keeps its own gateway, so DHCP, DNS and internet traffic stay on their side. The
      other side's machines resolve by name here (where no machine here has the name),
-     and their addresses aren't leased here.
+     and their addresses aren't leased here. { relabel } changes its label. Its
+     traffic is also counted per machine (by MAC address, on either side), for viewers
+     to show where a bridge's traffic comes from and goes.
    Any kind can send { provideUplink: settings }, the page's own uplink settings
    (PppUplink.provide), which hold until the LAN restarts; connections send them again
    when they reconnect.
@@ -40,7 +42,7 @@ import { ETHERTYPE_ARP, ETHERTYPE_IPV4, PROTO_UDP, DHCP_SERVER_PORT, DHCP_CLIENT
 
 const lan = new EthernetSwitch();
 const hosts = new Map();  // switch port -> { name, title, mac, ip, joined, rx, tx, rate }
-const trunks = new Map(); // switch port -> { id, label, remoteHosts, joined, rx, tx, rate }
+const trunks = new Map(); // switch port -> { id, label, remoteHosts, joined, rx, tx, rate, macs }
 const monitors = new Set();
 const connections = new Set(); // every MessagePort, cards and viewers
 
@@ -115,6 +117,20 @@ function crossesBridge(frame) {
   return true; // anything else (IPv6, IPX, ...) is the machines' own business
 }
 
+/* Count a frame crossing a bridge against the machines it's from and to: `out` is what
+   a machine sent across, `in` what it was sent (unicast only: a broadcast is for
+   everyone) */
+function countCrossing(trunk, frame) {
+  let count = (mac, dir) => {
+    let m = trunk.macs.get(mac);
+    if (!m) trunk.macs.set(mac, m = { in: 0, out: 0, sampled: { in: 0, out: 0 }, rate: { in: 0, out: 0 }, seen: 0 });
+    m[dir] += frame.length;
+    m.seen = Date.now();
+  };
+  count(macToString(frame.subarray(6, 12)), 'out');
+  if (!(frame[0] & 1)) count(macToString(frame.subarray(0, 6)), 'in');
+}
+
 /* What a bridge tells the other side about this LAN's machines */
 function hostList() {
   return [...hosts.values()].filter(h => h.mac).map(h => ({ name: h.name, title: h.title, mac: h.mac, ip: h.ip && ipToString(h.ip) }));
@@ -143,6 +159,7 @@ function state() {
     hosts: [...hosts.values()].map(h => ({ name: h.name, title: h.title, mac: h.mac, ip: h.ip && ipToString(h.ip), joined: h.joined, rx: h.rx, tx: h.tx, rate: h.rate })),
     uplink: { ...uplink.state(), rate: uplinkRate },
     bridges: [...trunks.values()].map(t => ({ id: t.id, label: t.label, joined: t.joined, rx: t.rx, tx: t.tx, rate: t.rate,
+      macs: Object.fromEntries([...t.macs].map(([mac, m]) => [mac, m.rate])),
       hosts: t.remoteHosts.map(h => ({ ...h, ip: h.ip && ipToString(h.ip),
         conflict: !!(h.ip && [...hosts.values()].some(l => l.ip && sameBytes(l.ip, h.ip))) })) })),
     sample: history.seconds[history.seconds.length - 1],
@@ -175,6 +192,11 @@ setInterval(() => {
   for (let t of trunks.values()) {
     t.rate = smooth(t.rate, t.rx - t.sampled.rx, t.tx - t.sampled.tx, seconds);
     t.sampled = { rx: t.rx, tx: t.tx };
+    for (let [mac, m] of t.macs) {
+      m.rate = smooth(m.rate, m.in - m.sampled.in, m.out - m.sampled.out, seconds);
+      m.sampled = { in: m.in, out: m.out };
+      if (now - m.seen > 60000) t.macs.delete(mac); // quiet for a while
+    }
   }
   let upIn = uplink.rx - lastSample.uplink.rx, upOut = uplink.tx - lastSample.uplink.tx;
   uplinkRate = smooth(uplinkRate, upIn, upOut, seconds);
@@ -266,6 +288,7 @@ onconnect = ev => {
       if (trunk) {
         if (!crossesBridge(frame)) return;
         trunk.rx += frame.length;
+        countCrossing(trunk, frame);
         lan.forward(port, frame);
         return;
       }
@@ -295,15 +318,18 @@ onconnect = ev => {
         deliver(frame) {
           if (!crossesBridge(frame)) return;
           let trunk = trunks.get(port);
-          if (trunk) trunk.tx += frame.length;
+          if (trunk) { trunk.tx += frame.length; countCrossing(trunk, frame); }
           let copy = frame.slice();
           messagePort.postMessage(copy.buffer, [copy.buffer]);
         },
       };
       trunks.set(port, { id: String(data.trunk.id || ''), label: String(data.trunk.label || ''), remoteHosts: [], joined: Date.now(),
-        rx: 0, tx: 0, sampled: { rx: 0, tx: 0 }, rate: { in: 0, out: 0 } });
+        rx: 0, tx: 0, sampled: { rx: 0, tx: 0 }, rate: { in: 0, out: 0 }, macs: new Map() });
       lan.attach(port);
       messagePort.postMessage({ hosts: hostList() });
+      publish();
+    } else if (data && typeof data.relabel == 'string' && port && trunks.has(port)) {
+      trunks.get(port).label = data.relabel.slice(0, 40);
       publish();
     } else if (data && data.remoteHosts && port && trunks.has(port)) {
       // From the other browser, so checked: only plausible names and addresses

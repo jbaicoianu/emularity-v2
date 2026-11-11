@@ -1,5 +1,6 @@
 import { LanBridge } from './bridge.js'
 import { ManualSignaling } from './signaling.js'
+import { Mesh } from './mesh.js'
 
 /* A modal that walks the user through bridging their network with a friend's (see
    bridge.js), passing the links along by whatever messaging app they use:
@@ -29,6 +30,7 @@ const label = {
 export class LanBridgeWizard {
   constructor(container, { uplink } = {}) {
     this.uplink = uplink;
+    Mesh.uplink = uplink; // for the bridges it makes with the rest of a group
     this.dialog = document.createElement('dialog');
     this.dialog.className = 'lan-wizard';
     this.dialog.innerHTML = `
@@ -75,7 +77,7 @@ export class LanBridgeWizard {
     let b = this.bridge;
     if (!b) return;
     let step = { inviting: 'invite', answering: 'reply', connecting: 'connecting', connected: 'connected' }[b.status];
-    if (b.status == 'closed') step = b.connected ? 'ended' : 'failed';
+    if (b.status == 'closed') step = b.connected || b.duplicate ? 'ended' : 'failed';
     if (step && step != this.step) this.show(step);
   }
 
@@ -112,7 +114,7 @@ export class LanBridgeWizard {
   choose() {
     let [p, buttons] = html(`<p>Are you starting the connection, or did a friend send you a link?</p>
       <div class="lan-wizard-choices">
-        <button type="button" class="lan-wizard-choice" data-choice="invite" autofocus><strong>Invite a friend</strong><span>Get a link to send them</span></button>
+        <button type="button" class="lan-wizard-choice" data-choice="invite" autofocus><strong>Invite a friend</strong><span>Get a link to send them. If you're already connected with others, they join the whole group.</span></button>
         <button type="button" class="lan-wizard-choice" data-choice="paste"><strong>I have a link from a friend</strong><span>Use the invitation they sent you</span></button>
       </div>`);
     buttons.querySelector('[data-choice="paste"]').addEventListener('click', () => this.show('paste'));
@@ -121,6 +123,7 @@ export class LanBridgeWizard {
       inviteButton.disabled = true;
       this.status(buttons, 'Preparing your invitation…');
       try {
+        Mesh.rejoin();
         this.setBridge(await LanBridge.invite({ label: label.get(), uplink: this.uplink }));
         this.follow();
       } catch (e) {
@@ -191,6 +194,7 @@ export class LanBridgeWizard {
       form.querySelector('[type="submit"]').disabled = true;
       this.status(form, 'Preparing your reply…');
       try {
+        Mesh.rejoin();
         this.setBridge(await LanBridge.join(this.offer, { label: label.get(), uplink: this.uplink }));
         this.follow();
       } catch (e) {
@@ -227,7 +231,7 @@ export class LanBridgeWizard {
   connected() {
     let who = this.bridge.remoteLabel || 'your friend';
     let [title, text, buttons] = html(`<h4 class="lan-wizard-success">Connected</h4>
-      <p>Your machines and <span></span>'s are on one network now. Theirs appear in your network list, and can be reached by name (e.g. <code>ping name.lan</code>). This tab keeps the connection open: closing it disconnects.</p>
+      <p>Your machines and <span></span>'s are on one network now. Theirs appear in your network list, and can be reached by name (e.g. <code>ping name.lan</code>). Anyone else in either group is connected automatically. This tab keeps the connections open: closing it disconnects.</p>
       <div class="lan-wizard-buttons"><button type="button" class="primary" autofocus>Done</button></div>`);
     text.querySelector('span').textContent = who;
     buttons.querySelector('button').addEventListener('click', () => this.dialog.close());
@@ -237,6 +241,7 @@ export class LanBridgeWizard {
   ended() {
     let [text, buttons] = html(`<p>The connection was closed.</p>
       <div class="lan-wizard-buttons"><button type="button" class="primary">Close</button></div>`);
+    if (this.bridge.duplicate) text.textContent = "You're already connected with " + (this.bridge.remoteLabel || 'that network') + ': nothing more to do.';
     buttons.querySelector('button').addEventListener('click', () => this.dialog.close());
     return [text, buttons];
   }

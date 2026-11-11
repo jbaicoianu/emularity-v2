@@ -3,6 +3,7 @@ import { LanGraph } from './lan-graph.js'
 import { LanBridge } from './bridge.js'
 import { ManualSignaling } from './signaling.js'
 import { LanBridgeWizard } from './bridge-wizard.js'
+import { Mesh } from './mesh.js'
 
 /* <emularity-lan-panel>: a live view of the virtual LAN. A map (the internet as a cloud
    above the gateway, machines below) and a table of machines with their names and
@@ -53,10 +54,13 @@ export class LanPanel extends HTMLElement {
       <p class="lan-empty">No machines are on the network. Machines join it when they start with networking enabled.</p>
       <section class="lan-bridges">
         <h4>Other networks</h4>
-        <p class="field-hint">Connect this network with a friend's, in their browser, so your machines can reach each other. Each side keeps its own internet connection.</p>
+        <p class="field-hint">Connect this network with friends' networks, in their browsers, so all your machines can reach each other (say, for a LAN game). Each network keeps its own internet connection.</p>
         <div class="lan-bridge-list"></div>
         <p class="lan-bridge-message" hidden></p>
-        <div class="lan-bridge-buttons"><button type="button" class="lan-connect-friend">Connect with a friend's network…</button></div>
+        <div class="lan-bridge-buttons">
+          <button type="button" class="lan-connect-friend">Connect with a friend's network…</button>
+          <button type="button" class="lan-leave" hidden>Leave group</button>
+        </div>
       </section>
       <div class="lan-actions">
         <button type="button" class="lan-restart" title="Restart the switch, router and uplink (and load any updated networking code). Running machines stay connected.">Restart network</button>
@@ -144,6 +148,7 @@ export class LanPanel extends HTMLElement {
   setupBridges() {
     this.wizard = new LanBridgeWizard(this, { uplink: this.getAttribute('uplink') });
     this.querySelector('.lan-connect-friend').addEventListener('click', () => { this.bridgeMessage(''); this.wizard.open(); });
+    this.querySelector('.lan-leave').addEventListener('click', () => Mesh.leave());
     this.onBridgeChange = () => this.renderBridges();
     LanBridge.events.addEventListener('change', this.onBridgeChange);
     // Failures show in the wizard if it's open, and here otherwise
@@ -191,18 +196,19 @@ export class LanPanel extends HTMLElement {
     let cards = new Map([...list.children].map(c => [c.bridgeId, c]));
     let wanted = [];
     let fmt = r => r ? formatBytes(Math.round(r.in)) + '/s ↓ ' + formatBytes(Math.round(r.out)) + '/s ↑' : '';
+    let heard = Mesh.heardOf();
     for (let bridge of LanBridge.all) {
       let card = cards.get(bridge.id);
-      if (!card || card.status != bridge.status) card = this.bridgeCard(bridge);
+      if (!card || card.status != bridge.status) card = this.bridgeCard(bridge, heard);
       if (bridge.status == 'connected') {
         let info = (this.state?.bridges || []).find(b => b.id == bridge.id);
         let n = bridge.remoteHosts.length;
-        card.querySelector('.lan-bridge-stats').textContent = n + ' machine' + (n == 1 ? '' : 's') + ' there' + (info ? ' · ' + fmt(info.rate) : '');
+        card.querySelector('.lan-bridge-stats').textContent = n + ' machine' + (n == 1 ? '' : 's') + (info ? ' · ' + fmt(info.rate) : '');
       }
       wanted.push(card);
     }
-    for (let b of this.state?.bridges || []) {
-      if ([...LanBridge.all].some(x => x.id == b.id)) continue;
+    let elsewhere = (this.state?.bridges || []).filter(b => ![...LanBridge.all].some(x => x.id == b.id));
+    for (let b of elsewhere) {
       let line = cards.get(b.id);
       if (!line || line.status != 'elsewhere') {
         line = document.createElement('div');
@@ -210,20 +216,25 @@ export class LanPanel extends HTMLElement {
         line.bridgeId = b.id;
         line.status = 'elsewhere';
       }
-      line.textContent = 'Connected to ' + (b.label || 'another browser') + "'s network (from another tab) · " + b.hosts.length + ' machines';
+      line.textContent = '⇄ ' + (b.label || 'another browser') + ' · ' + b.hosts.length + ' machines (connected from another tab)';
       wanted.push(line);
     }
     // Only touch the list when it changes: moving a card would lose a reply being typed
     if (wanted.length != list.children.length || wanted.some((c, i) => list.children[i] !== c)) list.replaceChildren(...wanted);
+    // A group is run from one tab: new connections made elsewhere wouldn't join it
+    let connect = this.querySelector('.lan-connect-friend');
+    connect.disabled = elsewhere.length > 0;
+    connect.title = connect.disabled ? 'Your group is connected from another tab of this browser: add friends from there' : '';
+    this.querySelector('.lan-leave').hidden = !LanBridge.all.size;
   }
 
-  /* A bridge being set up: who with, and a way back into the wizard */
-  bridgeCard(bridge) {
+  /* A bridge: who with, and for one being set up by hand, a way back into the wizard */
+  bridgeCard(bridge, heard) {
     let card = document.createElement('div');
     card.className = 'lan-bridge lan-bridge-' + bridge.status;
     card.bridgeId = bridge.id;
     card.status = bridge.status;
-    let who = bridge.remoteLabel || (bridge.status == 'inviting' ? 'a friend' : 'your friend');
+    let who = bridge.remoteLabel || heard.get(bridge.expectPeer)?.label || (bridge.status == 'inviting' ? 'a friend' : 'your friend');
     let line = document.createElement('p');
     let button = (text, action) => {
       let b = document.createElement('button');
@@ -233,11 +244,14 @@ export class LanPanel extends HTMLElement {
       return b;
     };
     if (bridge.status == 'connected') {
-      line.textContent = '⇄ Connected with ' + who + "'s network";
+      line.textContent = '⇄ ' + who + (bridge.auto ? ' (via your group)' : '');
       let stats = document.createElement('span');
       stats.className = 'lan-bridge-stats';
       line.append(' · ', stats);
-      card.append(line, button('Disconnect', () => bridge.close()));
+      card.append(line);
+    } else if (bridge.auto) {
+      line.textContent = 'Connecting to ' + who + ' (in your group)…';
+      card.append(line);
     } else {
       line.textContent = { inviting: 'Invitation waiting for a reply', answering: 'Waiting for ' + who + ' to open your reply',
         connecting: 'Connecting to ' + who + '…' }[bridge.status] || bridge.status;
@@ -287,6 +301,13 @@ export class LanPanel extends HTMLElement {
     this.updateFlows(state, hosts, bridges);
   }
 
+  /* The map. Each network is a box: this one with the gateway (and the internet above
+     it) and its machines, and each bridged one beside it with its machines. Bridges are
+     tunnels between the boxes' edges. A machine's traffic runs to the gateway, or for
+     a bridged machine, to the mouth of the tunnel, so traffic from several machines
+     squeezes into the tunnel and fans out again to the machines on the far side.
+     With one bridged network it sits to the right; with more, they're stacked on
+     either side. */
   buildMap(state, hosts, bridges) {
     let svg = this.querySelector('.lan-map');
     let ns = 'http://www.w3.org/2000/svg';
@@ -296,10 +317,17 @@ export class LanPanel extends HTMLElement {
       for (let c of children) e.append(c);
       return e;
     };
-    let maxName = bridges.length ? 20 : 24;
-    let box = (x, y, name, ip, cls, tooltip, rx = 6) => {
-      if (name.length > maxName) name = name.slice(0, maxName - 1) + '…'; // the full name is in the tooltip and table
-      let w = Math.max(104, name.length * 6.6 + 16); // fits 11px text
+    const ROW = 58;
+    let n = bridges.length;
+    let width = n == 0 ? 640 : n == 1 ? 720 : 880;
+    let columns = n == 0 ? { local: { x: 10, w: 620 } }
+      : n == 1 ? { local: { x: 10, w: 280 }, right: { x: 430, w: 280 } }
+      : { left: { x: 10, w: 200 }, local: { x: 280, w: 320 }, right: { x: 670, w: 200 } };
+    let perRow = col => Math.max(1, Math.floor((col.w - 20) / 130));
+    let maxName = col => Math.floor((col.w / perRow(col) - 30) / 6.6);
+    let box = (x, y, name, ip, cls, tooltip, limit = 24, rx = 6) => {
+      if (name.length > limit) name = name.slice(0, limit - 1) + '…'; // the full name is in the tooltip and table
+      let w = Math.max(96, name.length * 6.6 + 16); // fits 11px text
       return el('g', { class: 'lan-node ' + cls },
         el('rect', { x: x - w / 2, y: y - 17, width: w, height: 34, rx }),
         el('text', { x, y: y - 3, class: 'lan-name' }, name),
@@ -316,85 +344,102 @@ export class LanPanel extends HTMLElement {
       g.ends = { a, b };
       return g;
     };
-    // Machines in rows of up to `perRow` across a column centred on `cx`, from `top`
-    const ROW = 58;
-    let place = (list, cx, width, top, perRow) => list.map((item, i) => {
-      let row = Math.floor(i / perRow), inRow = Math.min(perRow, list.length - row * perRow);
-      return { item, at: { x: cx - width / 2 + width * ((i % perRow) + 0.5) / inRow, y: top + row * ROW } };
+    // Machines in rows across a column, from `top`
+    let place = (list, col, top) => list.map((item, i) => {
+      let per = perRow(col), row = Math.floor(i / per), inRow = Math.min(per, list.length - row * per);
+      return { item, at: { x: col.x + col.w * ((i % per) + 0.5) / inRow, y: top + row * ROW } };
     });
-    let rowsOf = (n, perRow) => Math.ceil(n / perRow) || 1;
+    let rows = (count, col) => Math.ceil(count / perRow(col)) || 1;
 
-    // This browser's segment: the internet at the top, the gateway below it, and its
-    // machines under that, so traffic fans out from the uplink to the machines using
-    // it. With bridges, it takes the left half, and each bridged network is a segment
-    // on the right, its machines hanging off the far end of the tunnel to it.
-    let split = bridges.length > 0;
-    let localCx = split ? 160 : 320, localW = split ? 320 : 640, perRow = split ? 2 : 4;
+    let under = [], flows = [], feeds = [], nodes = [], labels = [];
+    let local = columns.local, cx = local.x + local.w / 2, top = 110;
+
+    // The bridged networks first, as they decide how tall this one's box is
+    let sides = { left: top, right: top }, mouths = [], bottom = 0;
+    bridges.forEach((b, i) => {
+      let side = n == 1 || i % 2 == 0 ? 'right' : 'left', col = columns[side];
+      let y0 = sides[side], height = 34 + rows(b.hosts.length, col) * ROW;
+      sides[side] = y0 + height + 24;
+      bottom = Math.max(bottom, y0 + height);
+      let who = (b.label || 'Another browser') + "'s network";
+      under.push(el('g', { class: 'lan-segment lan-segment-remote' },
+        el('rect', { x: col.x, y: y0, width: col.w, height, rx: 10 }),
+        el('title', {}, who + ': its machines, bridged with this network. It has its own gateway and internet connection.')));
+      labels.push(el('text', { x: side == 'right' ? col.x + col.w - 10 : col.x + 10, y: y0 + 16,
+        class: 'lan-segment-name', 'text-anchor': side == 'right' ? 'end' : 'start' }, who));
+      // Tunnel mouths, level with each other, at the middle of the bridged box
+      let y = y0 + Math.min(height / 2, 34 + ROW / 2);
+      let near = { x: side == 'right' ? local.x + local.w : local.x, y };
+      let far = { x: side == 'right' ? col.x : col.x + col.w, y };
+      mouths.push(y);
+      under.push(el('g', { class: 'lan-tunnel' },
+        el('line', { x1: near.x, y1: y, x2: far.x, y2: y, class: 'lan-tunnel-pipe' }),
+        el('line', { x1: near.x, y1: y, x2: far.x, y2: y, class: 'lan-tunnel-bore' }),
+        el('title', {}, 'Tunnel (WebRTC) to ' + who)));
+      labels.push(el('text', { x: (near.x + far.x) / 2, y: y - 17, class: 'lan-tunnel-label' }, '⇄ ' + (b.label || 'tunnel')));
+      for (let at of [near, far]) nodes.push(el('rect', { x: at.x - 4, y: y - 14, width: 8, height: 28, rx: 2, class: 'lan-tunnel-port' }));
+      let tunnel = flow('tunnel:' + b.id, near, far, 'lan-tunnel-flow');
+      tunnel.dataset.below = ''; // its rate goes under it, the name being above
+      flows.push(tunnel);
+      // Their machines, each fed from the tunnel's mouth
+      let hostsTop = y0 + 34 + ROW / 2;
+      for (let { item: h, at } of place(b.hosts, col, hostsTop)) {
+        under.push(el('line', { x1: far.x, y1: far.y, x2: at.x, y2: at.y, class: 'lan-link lan-remote-link' }));
+        if (h.mac) feeds.push(flow('feed:' + b.id + ':' + h.mac, far, at, 'lan-feed'));
+        nodes.push(box(at.x, at.y, h.name, (h.ip || '…') + (h.conflict ? ' ⚠' : ''), 'lan-remote-node' + (h.conflict ? ' lan-conflict' : ''),
+          (h.title ? h.title + '\n' : '') + (h.mac || '') + '\non ' + who + (h.conflict ? '\nSame address as a machine here' : ''), maxName(col)));
+      }
+      if (!b.hosts.length) labels.push(el('text', { x: col.x + col.w / 2, y: hostsTop + 4, class: 'lan-segment-empty' }, 'no machines yet'));
+      // This network's machines' traffic through the tunnel, from its near mouth
+      for (let h of hosts) if (h.mac) feeds.push({ key: 'feed:' + b.id + ':' + h.mac, near, host: h });
+    });
+
+    // This network: the gateway at the top of its box (the internet above it), and its
+    // machines below
+    let gateway = { x: cx, y: top + 40 }, cloudAt = { x: cx, y: 66 };
+    let hostsTop = top + 110;
+    let localBottom = Math.max(hostsTop + (rows(hosts.length, local) - 1) * ROW + 35, ...mouths.map(y => y + 34), bottom);
+    let mine = Mesh.label;
+    under.unshift(el('g', { class: 'lan-segment lan-segment-local' },
+      el('rect', { x: local.x, y: top, width: local.w, height: localBottom - top, rx: 10 }),
+      el('title', {}, 'This browser\'s network')));
+    labels.push(el('text', { x: local.x + 10, y: top + 16, class: 'lan-segment-name lan-segment-name-local', 'text-anchor': 'start' },
+      'Your network' + (mine ? ' · ' + mine : '')));
     let up = state.uplink || { status: 'off' };
-    let gateway = { x: localCx, y: 150 }, cloudAt = { x: localCx, y: 66 };
-    let cloud = el('g', { class: 'lan-cloud lan-uplink-' + up.status, role: 'button', tabindex: 0, transform: `translate(${localCx - 320},0)` },
+    let cloud = el('g', { class: 'lan-cloud lan-uplink-' + up.status, role: 'button', tabindex: 0, transform: `translate(${cx - 320},0)` },
       el('path', { d: 'M276,66 a20,20 0 0,1 2,-40 a28,28 0 0,1 50,-10 a24,24 0 0,1 40,14 a18,18 0 0,1 -4,36 z' }),
       el('text', { x: 320, y: 42, class: 'lan-name' }, 'Internet'),
       el('text', { x: 320, y: 56, class: 'lan-ip' }, up.session ? up.session.ip : STATUS_TEXT[up.status] || up.status),
       el('title', {}, 'Internet settings'));
     cloud.addEventListener('click', () => this.toggleUplinkForm());
     cloud.addEventListener('keydown', ev => { if (ev.key == 'Enter' || ev.key == ' ') { ev.preventDefault(); this.toggleUplinkForm(); } });
-
-    let under = [], flows = [flow('uplink', cloudAt, gateway, 'lan-uplink-flow lan-uplink-' + up.status)], nodes = [];
-    for (let { item: h, at } of place(hosts, localCx, localW, 260, perRow)) {
+    flows.unshift(flow('uplink', cloudAt, gateway, 'lan-uplink-flow lan-uplink-' + up.status));
+    let hostAt = new Map();
+    for (let { item: h, at } of place(hosts, local, hostsTop)) {
+      hostAt.set(h, at);
       flows.push(flow('host:' + h.name, gateway, at)); // `in`: toward the machine
-      nodes.push(box(at.x, at.y, h.name, h.ip || '…', h.ip ? '' : 'lan-pending', (h.title ? h.title + '\n' : '') + (h.mac || '')));
+      nodes.push(box(at.x, at.y, h.name, h.ip || '…', h.ip ? '' : 'lan-pending', (h.title ? h.title + '\n' : '') + (h.mac || ''), maxName(local)));
     }
-    let bottom = 260 + rowsOf(hosts.length, perRow) * ROW;
+    if (!hosts.length) labels.push(el('text', { x: cx, y: hostsTop + 4, class: 'lan-segment-empty' }, 'no machines yet'));
+    feeds = feeds.map(f => f.near ? flow(f.key, f.near, hostAt.get(f.host), 'lan-feed') : f);
+    let gw = box(gateway.x, gateway.y, 'gateway', state.gateway, 'lan-gateway', 'Router: DHCP, DNS, NAT', 24, 17);
 
-    let top = 110;
-    for (let b of bridges) {
-      let who = (b.label || 'Another browser') + "'s network";
-      let remoteRows = rowsOf(b.hosts.length, 2);
-      let height = 76 + remoteRows * ROW;
-      let end = { x: 480, y: top + 40 }; // where the tunnel comes out: their switch
-      under.push(el('g', { class: 'lan-segment' },
-        el('rect', { x: 334, y: top, width: 296, height, rx: 10 }),
-        el('text', { x: 620, y: top + 18, class: 'lan-segment-name' }, who),
-        el('title', {}, who + ': its machines, bridged with this network. It has its own gateway and internet connection.')));
-      // The tunnel: a pipe from this network's switch (at the gateway) to theirs,
-      // carrying the bridge's traffic as its bands
-      // labelled between the gateway's box and the segment
-      let labelX = (gateway.x + 56 + 334) / 2, labelY = gateway.y + (end.y - gateway.y) * (labelX - gateway.x) / (end.x - gateway.x);
-      under.push(el('g', { class: 'lan-tunnel' },
-        el('line', { x1: gateway.x, y1: gateway.y, x2: end.x, y2: end.y, class: 'lan-tunnel-pipe' }),
-        el('line', { x1: gateway.x, y1: gateway.y, x2: end.x, y2: end.y, class: 'lan-tunnel-bore' }),
-        el('text', { x: labelX, y: labelY - 17, class: 'lan-tunnel-label' }, '⇄ tunnel'),
-        el('title', {}, 'Bridge to ' + who)));
-      flows.push(flow('bridge:' + b.id, gateway, end, 'lan-tunnel-flow'));
-      nodes.push(el('circle', { cx: end.x, cy: end.y, r: 5, class: 'lan-tunnel-end' }));
-      for (let { item: h, at } of place(b.hosts, 480, 296, top + 100, 2)) {
-        under.push(el('line', { x1: end.x, y1: end.y, x2: at.x, y2: at.y, class: 'lan-link lan-remote-link' }));
-        nodes.push(box(at.x, at.y, h.name, (h.ip || '…') + (h.conflict ? ' ⚠' : ''), 'lan-remote-node' + (h.conflict ? ' lan-conflict' : ''),
-          (h.title ? h.title + '\n' : '') + (h.mac || '') + '\non ' + who + (h.conflict ? '\nSame address as a machine here' : '')));
-      }
-      if (!b.hosts.length) nodes.push(el('text', { x: 480, y: top + 104, class: 'lan-segment-empty' }, 'no machines yet'));
-      top += height + 24;
-      bottom = Math.max(bottom, top);
-    }
-
-    let gw = box(gateway.x, gateway.y, 'gateway', state.gateway, 'lan-gateway', 'Router: DHCP, DNS, NAT', 17);
-    let height = bottom + 20;
-    svg.setAttribute('viewBox', '0 0 640 ' + height);
+    let height = localBottom + 30;
+    svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
     let legend = el('g', { class: 'lan-legend' },
       el('line', { x1: 8, y1: height - 8, x2: 24, y2: height - 8, class: 'lan-band lan-band-in', 'stroke-width': 4 }),
       el('text', { x: 28, y: height - 5 }, 'to a machine / from the internet'),
       el('line', { x1: 196, y1: height - 8, x2: 212, y2: height - 8, class: 'lan-band lan-band-out', 'stroke-width': 4 }),
       el('text', { x: 216, y: height - 5 }, 'from a machine / to the internet'));
-    svg.replaceChildren(...under, ...flows, legend, cloud, ...nodes, gw); // links under the boxes
-    this.flows = new Map(flows.map(f => [f.dataset.key, f]));
+    svg.replaceChildren(...under, ...feeds, ...flows, legend, cloud, ...nodes, gw, ...labels); // links under the boxes
+    this.flows = new Map([...flows, ...feeds].map(f => [f.dataset.key, f]));
   }
 
   updateFlows(state, hosts, bridges) {
     // Band width grows with the log of the rate: ~2px at 1 KB/s, ~9 at 1 MB/s, ~11 at 10 MB/s
     let width = rate => rate < 64 ? 0 : Math.min(16, 1.5 + 2.4 * Math.log10(1 + rate / 1024));
     let fmt = rate => formatBytes(Math.round(rate)) + '/s';
-    let set = (key, rate) => {
+    let set = (key, rate, labelled = true) => {
       let g = this.flows && this.flows.get(key);
       if (!g) return;
       let { a, b } = g.ends;
@@ -412,11 +457,12 @@ export class LanPanel extends HTMLElement {
       };
       place(bandIn, wIn, 1, a, b);
       place(bandOut, wOut, -1, b, a);
-      let busy = rate.in >= 1024 || rate.out >= 1024;
+      let busy = labelled && (rate.in >= 1024 || rate.out >= 1024);
       label.style.display = busy ? '' : 'none';
       if (busy) {
         // Beside the middle of the link, clear of the bands
         let off = Math.max(wIn, wOut) + 12;
+        if ('below' in g.dataset && ny < 0) { nx = -nx; ny = -ny; }
         label.setAttribute('x', a.x + dx * 0.5 + nx * off);
         label.setAttribute('y', a.y + dy * 0.5 + ny * off + 4);
         // Grow away from the link, whichever side of it the label is on
@@ -424,11 +470,24 @@ export class LanPanel extends HTMLElement {
         label.textContent = '↓' + fmt(rate.in) + '  ↑' + fmt(rate.out);
       }
     };
+    let zero = { in: 0, out: 0 };
     let up = state.uplink;
-    set('uplink', up && up.rate ? up.rate : { in: 0, out: 0 });
-    for (let h of hosts) set('host:' + h.name, h.rate || { in: 0, out: 0 });
-    // A bridge's rx is what came from the other side, i.e. toward the machines here
-    for (let b of bridges) set('bridge:' + b.id, b.rate ? { in: b.rate.out, out: b.rate.in } : { in: 0, out: 0 });
+    set('uplink', up && up.rate ? up.rate : zero);
+    // A machine's own link carries what doesn't go through a tunnel
+    for (let h of hosts) {
+      let rate = { ...(h.rate || zero) };
+      for (let b of bridges) {
+        let m = h.mac && b.macs?.[h.mac];
+        if (m) { rate.in = Math.max(0, rate.in - m.in); rate.out = Math.max(0, rate.out - m.out); }
+      }
+      set('host:' + h.name, rate, !bridges.length); // with tunnels too, the table has the figures
+    }
+    for (let b of bridges) {
+      // A bridge's rx came from the other side; its `in` runs from here to there
+      set('tunnel:' + b.id, b.rate ? { in: b.rate.out, out: b.rate.in } : zero);
+      // Each machine's share, either side: `in` toward the machine
+      for (let h of hosts) if (h.mac) set('feed:' + b.id + ':' + h.mac, b.macs?.[h.mac] || zero, false);
+      for (let h of b.hosts) if (h.mac) set('feed:' + b.id + ':' + h.mac, b.macs?.[h.mac] || zero, false);
+    }
   }
 }
-

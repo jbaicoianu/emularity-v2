@@ -24,28 +24,49 @@ import { awaitAnswer, deliverAnswer } from './signaling.js'
      let bridge = await LanBridge.invite({ label });  // bridge.offer -> the other side
      bridge.acceptAnswer(answer);                     // what came back
    and on the other side:
-     let bridge = await LanBridge.join(offer, { label });  // bridge.answer -> back */
+     let bridge = await LanBridge.join(offer, { label });  // bridge.answer -> back
+
+   Once connected, each side says hello with its network's id (LanBridge.peerId, one
+   per browser, as the LAN is) and name, which become remotePeer and remoteLabel. Other
+   control messages are left to the mesh (see mesh.js), which hears them as 'control'
+   events on LanBridge.events and sends its own with sendControl(). Bridges the mesh
+   makes by itself are `auto`. */
 
 const ICE_SERVERS = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun.cloudflare.com:3478'] }];
 const ICE_GATHER_TIMEOUT = 4000; // ms: the offer/answer carry all candidates (no trickling)
 const MAX_BUFFERED = 1 << 20;    // bytes queued in the frame channel before frames are dropped
 
+/* This browser's network's id, the same in every tab (the LAN is shared by them) */
+function networkId() {
+  const KEY = 'emularity-lan-peer-id';
+  try {
+    let id = localStorage.getItem(KEY);
+    if (!id) localStorage.setItem(KEY, id = crypto.randomUUID());
+    return id;
+  } catch (e) {
+    return crypto.randomUUID();
+  }
+}
+
 export class LanBridge extends EventTarget {
   static all = new Set();
   static iceServers = ICE_SERVERS;
+  static peerId = networkId();
 
   status = 'new';
   error = null;
+  remotePeer = null;
   remoteLabel = '';
   remoteHosts = [];
   rx = 0; tx = 0; // bytes of frames each way
   offer = null; answer = null;
 
-  constructor({ label = '', uplink } = {}) {
+  constructor({ label = '', uplink, auto = false } = {}) {
     super();
     this.id = crypto.randomUUID();
     this.label = label;
     this.uplink = uplink;
+    this.auto = auto;
     this.created = Date.now();
     this.pc = new RTCPeerConnection({ iceServers: LanBridge.iceServers });
     this.pc.addEventListener('connectionstatechange', () => {
@@ -67,7 +88,7 @@ export class LanBridge extends EventTarget {
       await bridge.pc.setLocalDescription(await bridge.pc.createOffer());
       await bridge.gathered();
       bridge.offer = { type: 'offer', id: bridge.id, sdp: bridge.pc.localDescription.sdp, label: bridge.label };
-      bridge.stopWaiting = awaitAnswer(bridge.id, answer => bridge.acceptAnswer(answer).catch(() => {}));
+      if (!bridge.auto) bridge.stopWaiting = awaitAnswer(bridge.id, answer => bridge.acceptAnswer(answer).catch(() => {}));
       bridge.setStatus('inviting');
     } catch (e) {
       bridge.close(e.message);
@@ -152,8 +173,17 @@ export class LanBridge extends EventTarget {
         this.remoteHosts = msg.hosts;
         this.trunk?.remoteHosts(msg.hosts);
         this.emit();
+      } else if (msg.hello) {
+        this.remotePeer = String(msg.hello.peer || '');
+        if (msg.hello.label) this.remoteLabel = String(msg.hello.label).slice(0, 40);
+        this.trunk?.relabel(this.remoteLabel);
+        this.emit();
+        LanBridge.events.dispatchEvent(new CustomEvent('hello', { detail: { bridge: this } }));
+      } else if (msg.bye) {
+        this.close();
+      } else {
+        LanBridge.events.dispatchEvent(new CustomEvent('control', { detail: { bridge: this, msg } }));
       }
-      if (msg.bye) this.close();
     });
     opened();
   }
@@ -172,7 +202,12 @@ export class LanBridge extends EventTarget {
     });
     if (this.remoteHosts.length) this.trunk.remoteHosts(this.remoteHosts);
     this.connected = Date.now();
+    this.sendControl({ hello: { peer: LanBridge.peerId, label: this.label } });
     this.setStatus('connected');
+  }
+
+  sendControl(msg) {
+    if (this.control?.readyState == 'open') this.control.send(JSON.stringify(msg));
   }
 
   close(error = null) {
@@ -197,7 +232,9 @@ export class LanBridge extends EventTarget {
     this.dispatchEvent(new Event('change'));
     LanBridge.events.dispatchEvent(new Event('change'));
   }
-  /* Fires 'change' when any bridge in this page changes, and 'error' ({ detail: {
-     bridge, error } }) when one fails */
+  /* Fires 'change' when any bridge in this page changes, 'error' ({ detail: { bridge,
+     error } }) when one fails, 'hello' ({ detail: { bridge } }) when the other side
+     says who it is, and 'control' ({ detail: { bridge, msg } }) for other control
+     messages */
   static events = new EventTarget();
 }
