@@ -1498,6 +1498,12 @@ class CollectionItem extends HTMLElement {
   static exeField = false;  // whether titles have a "program to run"
   static captureMouseField = false; // whether titles can capture the mouse on click
   static networkField = false; // whether titles can join the virtual LAN
+  /* The network it joins: 'lan', or null. Machines that can join are on it unless
+     turned off (record.network 'none'). */
+  get network() {
+    if (!this.constructor.networkField || this.record.network == 'none') return null;
+    return this.record.network || 'lan';
+  }
   static cores = null;      // { id: label } of emulator cores to choose from, if any
   static onscreenKeyboard = true;
   static mediaDrives = null; // { drive: { label, kind } } removable drives titles keep disks for
@@ -2496,8 +2502,8 @@ class X86Item extends CollectionItem {
     if (r.memory) emu.setAttribute('memory', String(r.memory));
     if (r.console) emu.setAttribute('console', r.console); // 'serial' for serial-only images
     if (r.captureMouse) emu.setAttribute('capturemouse', '');
-    if (r.network) {
-      emu.setAttribute('network', r.network);
+    if (this.network) {
+      emu.setAttribute('network', this.network);
       emu.setAttribute('hostname', this.hostname);
       emu.setAttribute('label', r.title);
       let uplink = document.querySelector('emularity-collection')?.getAttribute('uplink');
@@ -2740,7 +2746,7 @@ class EditDialog extends HTMLElement {
       select.replaceChildren(...Object.entries(cores).map(([id, label]) => new Option(label, id)));
       select.value = r.core || Object.keys(cores)[0];
     }
-    this.field('edit-network').checked = r.network == 'lan';
+    this.field('edit-network').checked = item.network == 'lan';
     this.field('edit-hostname').value = r.hostname || '';
     this.field('edit-hostname').placeholder = item.hostname;
     this.querySelector('.edit-exe-field').style.display = item.constructor.exeField ? '' : 'none';
@@ -2791,7 +2797,7 @@ class EditDialog extends HTMLElement {
       fields.acpi = this.field('edit-acpi').checked || undefined;
     }
     if (this.item.constructor.networkField) {
-      fields.network = this.field('edit-network').checked ? 'lan' : undefined;
+      fields.network = this.field('edit-network').checked ? undefined : 'none'; // on by default
       fields.hostname = this.field('edit-hostname').value.trim() || undefined;
     }
     this.item.update(fields);
@@ -3410,7 +3416,7 @@ class AddDialog extends HTMLElement {
             <label>Video memory <select name="system-vga"></select></label>
             <label>Network card <select name="system-net"></select></label>
           </div>
-          <label class="check"><input type="checkbox" name="system-lan"> Connect to the local network (shared by every machine running in this browser)</label>
+          <label class="check"><input type="checkbox" name="system-lan" checked> Connect to the local network (shared by every machine running in this browser)</label>
           <label class="check"><input type="checkbox" name="system-acpi"> ACPI power management <span class="field-hint">(leave off for Windows 9x: with it, shutting down doesn't turn the machine off)</span></label>
           <label>CD-ROM <input type="file" name="system-cd" multiple></label>
           <label>Floppy A: <input type="file" name="system-fda"></label>
@@ -3506,7 +3512,7 @@ class AddDialog extends HTMLElement {
     select('system-vga', p.VGA_MEMORY_SIZES.map(mb => [mb, mb + ' MB']), 8);
     select('system-net', Object.entries(p.NET_CARDS), 'ne2k');
     this.field('system-title').value = '';
-    this.field('system-lan').checked = false;
+    this.field('system-lan').checked = true;
     this.field('system-acpi').checked = false;
     this.field('system-cd').accept = p.mediaAccept.cdrom;
     this.field('system-fda').accept = p.mediaAccept.floppy;
@@ -3524,7 +3530,7 @@ class AddDialog extends HTMLElement {
     let item = this.add(this.platform.systemRecord({
       title, cpu: f('system-cpu').value, hda: +f('system-hda').value, hdb: +f('system-hdb').value || 0,
       memory: +f('system-memory').value, vgaMemory: +f('system-vga').value, netCard: f('system-net').value,
-      acpi: f('system-acpi').checked, network: f('system-lan').checked ? 'lan' : null,
+      acpi: f('system-acpi').checked, network: f('system-lan').checked ? null : 'none',
     }));
     try {
       for (let [i, disk] of cds.entries()) {
