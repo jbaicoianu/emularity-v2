@@ -25,6 +25,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # The virtual LAN's internet uplink settings (PPP server and login), which the
+      # collection page loads from examples/uplink.json. Kept out of git (see
+      # .gitignore) and stored as a repository secret; skipped if it isn't set.
+      - name: Write uplink settings
+        env:
+          UPLINK_JSON: ${{ secrets.UPLINK_JSON }}
+        run: |
+          if [ -n "$UPLINK_JSON" ]; then
+            printf '%s' "$UPLINK_JSON" > examples/uplink.json
+            jq -e .url examples/uplink.json > /dev/null
+          fi
+
       - name: Configure Pages
         uses: actions/configure-pages@v5
 
