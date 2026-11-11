@@ -3731,7 +3731,6 @@ class CollectionPlayer extends HTMLElement {
           <button class="pb-keys" title="Send keys your computer would keep for itself (Ctrl+Alt+Del, function keys…)">⌨</button>
           <div class="pb-media-popup pb-keys-popup" hidden></div>
         </span>
-        <button class="pb-network" title="Show the machines on the local network">🖧</button>
         <button class="pb-capture" title="Capture mouse (Esc releases it)">🖱</button>
         <button class="pb-mute"></button>
         <button class="pb-theater" title="Theater mode">▭</button>
@@ -3775,7 +3774,6 @@ class CollectionPlayer extends HTMLElement {
     });
 
     // Pointer lock, for emulators that support it: raw relative mouse movement
-    bar.querySelector('.pb-network').addEventListener('click', () => this.dispatchEvent(new CustomEvent('shownetwork', { bubbles: true })));
     let captureBtn = bar.querySelector('.pb-capture');
     if (typeof this.emu.lockPointer == 'function') {
       captureBtn.addEventListener('click', () => this.emu.lockPointer().catch(e => console.warn('Emularity: pointer lock failed', e)));
@@ -3784,7 +3782,8 @@ class CollectionPlayer extends HTMLElement {
     }
 
     // CPU graphs, and drive and network lights, for what the emulator reports on. The
-    // drive lights double as the disk menus: click the floppy to change floppies.
+    // drive lights double as the disk menus (click the floppy to change floppies), and
+    // the network light, for machines that can network, shows the network.
     await Promise.all([import('../src/ui/activity-lights.js'), import('../src/ui/performance-graphs.js')]);
     let graphs = document.createElement('emularity-performance-graphs');
     graphs.className = 'pb-graphs';
@@ -3792,6 +3791,10 @@ class CollectionPlayer extends HTMLElement {
     let lights = document.createElement('emularity-activity-lights');
     lights.className = 'pb-lights';
     lights.emulator = this.emu;
+    if (item.constructor.networkField) {
+      lights.network = { hint: 'Click to show the network' };
+      lights.addEventListener('networkclick', () => this.dispatchEvent(new CustomEvent('shownetwork', { bubbles: true })));
+    }
     bar.querySelector('.pb-media-wrap').prepend(lights);
     bar.querySelector('.pb-controls').prepend(graphs);
 

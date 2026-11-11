@@ -15,7 +15,15 @@
      lights.addEventListener('driveclick', ev => ...);  // detail: { drive, element }
 
    Those drives get a light even before the emulator reports on them (an empty CD
-   drive, say), and clicking one sends driveclick (bubbling) with the drive's id. */
+   drive, say), and clicking one sends driveclick (bubbling) with the drive's id.
+
+   The network light can be clickable too, e.g. to show the network:
+
+     lights.network = { hint: 'Click to show the network' };
+     lights.addEventListener('networkclick', ev => ...);  // detail: { device, element }
+
+   It's there even if the emulator has no network card (dimmed), so it's still a way
+   to the network. */
 
 const LIT_MS = 120; // how long a light stays on after the last activity
 
@@ -80,6 +88,12 @@ export class ActivityLights extends HTMLElement {
     if (this.isConnected) this.render(this.reported);
   }
 
+  get network() { return this._network || null; }
+  set network(options) {
+    this._network = options || null;
+    if (this.isConnected) this.render(this.reported);
+  }
+
   get emulator() { return this._emulator || null; }
   set emulator(emu) {
     this.unlisten();
@@ -114,16 +128,24 @@ export class ActivityLights extends HTMLElement {
       let after = devices.findLastIndex(x => x.kind == d.kind);
       devices.splice(after < 0 ? devices.length : after + 1, 0, { id: d.id, kind: d.kind, label: d.label, medium: d.current ? d.current.name : null, features: [] });
     }
+    if (this.network && !devices.some(d => d.kind == 'network')) {
+      devices.push({ id: 'network', kind: 'network', label: 'Network (not connected)', absent: true, features: [] });
+    }
     this.devices = new Map();
     this.replaceChildren();
     for (let d of devices) {
-      let drive = drives.get(d.id);
-      let el = document.createElement(drive ? 'button' : 'span');
+      let drive = drives.get(d.id), network = d.kind == 'network' && this.network;
+      let el = document.createElement(drive || network ? 'button' : 'span');
       el.className = 'al-device al-' + d.kind;
       if (drive) {
         el.type = 'button';
         el.addEventListener('click', () => {
           this.dispatchEvent(new CustomEvent('driveclick', { bubbles: true, detail: { drive: d.id, element: el } }));
+        });
+      } else if (network) {
+        el.type = 'button';
+        el.addEventListener('click', () => {
+          this.dispatchEvent(new CustomEvent('networkclick', { bubbles: true, detail: { device: d.id, element: el } }));
         });
       }
       // Drive letters, where there are several drives of a kind
@@ -132,10 +154,10 @@ export class ActivityLights extends HTMLElement {
       el.innerHTML = `<svg viewBox="0 0 16 16" aria-hidden="true">${ICONS[d.kind] || ICONS.hdd}</svg>` +
         (letter && devices.filter(x => x.kind == d.kind).length > 1 ? `<span class="al-letter">${letter[1]}:</span>` : '') +
         leds.map(l => `<span class="al-led" data-led="${l}"></span>`).join('');
-      el.classList.toggle('al-empty', ['floppy', 'cdrom'].includes(d.kind) && !d.medium);
+      el.classList.toggle('al-empty', ['floppy', 'cdrom'].includes(d.kind) && !d.medium || !!d.absent);
       let leds_ = Object.fromEntries([...el.querySelectorAll('.al-led')].map(x => [x.dataset.led, x]));
       if (d.motor) leds_.activity.classList.add('al-motor');
-      let entry = { device: d, el, leds: leds_, timers: {}, clickable: !!drive };
+      let entry = { device: d, el, leds: leds_, timers: {}, clickable: drive ? 'Click to change disks' : network ? this.network.hint : null };
       el.addEventListener('mouseenter', () => this.describe(entry));
       this.describe(entry);
       this.devices.set(d.id, entry);
@@ -154,7 +176,7 @@ export class ActivityLights extends HTMLElement {
       if (t.transmit) parts.push('sent ' + fmtBytes(t.transmit));
       if (parts.length) text += '\n' + parts.join(', ') + ' this session';
     }
-    if (clickable) text += '\nClick to change disks';
+    if (clickable) text += '\n' + clickable;
     el.title = text;
     el.setAttribute('aria-label', text);
   }
