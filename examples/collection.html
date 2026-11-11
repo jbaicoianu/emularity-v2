@@ -1420,11 +1420,12 @@ class ArchiveOrgSource extends SoftwareSource {
 /* The machines from copy.sh/v86's demo page: complete v86 configurations (disk images,
    memory, kernel command line, ...), imported by tools/import-v86-catalog.mjs.
    Image URLs in the catalog start with "{host}", replaced by `host`: the images are
-   copy.sh's, and i.copy.sh refuses requests referred by other sites, so locally they
-   go through v86-proxy.py's /copysh/ route. A public deployment should point this at
-   its own mirror (or have copy.sh's blessing). */
+   copy.sh's, fetched straight from i.copy.sh. It sends CORS headers but refuses
+   requests referred by other sites; this page sends no Referer (see the meta tag in
+   <head>), which it allows. (v86-proxy.py's /copysh/ route is the older workaround,
+   and only exists on the local dev server.) */
 class V86CatalogSource extends SoftwareSource {
-  static host = '/copysh/';
+  static host = 'https://i.copy.sh/';
   label = 'copy.sh/v86 machines';
   hint = 'Operating systems and demos from the copy.sh/v86 project. Click one to add it to your collection.';
 
@@ -2423,6 +2424,12 @@ class X86Item extends CollectionItem {
       if (fs.basefs) fs.basefs.url = V86CatalogSource.host + 'fs.json';
       r.source = 'catalog';
       changed = true;
+    }
+    // Catalog items added when images came through the dev server's /copysh/ proxy,
+    // which a static deployment doesn't have
+    if (r.v86opts) {
+      let json = JSON.stringify(r.v86opts), fixed = json.replaceAll('"/copysh/', '"' + V86CatalogSource.host);
+      if (fixed != json) { r.v86opts = JSON.parse(fixed); changed = true; }
     }
     return changed;
   }
