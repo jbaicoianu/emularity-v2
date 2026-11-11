@@ -14,7 +14,9 @@ const UNREACHABLE_NET = 0, UNREACHABLE_PORT = 3;
    its own address, replies to pings, runs a DHCP server handing out addresses from
    the subnet, and a DNS server for the machines' names (as given by `names`, an
    object with lookup(name) -> IP bytes, reverse(IP bytes) -> name and forMac(MAC
-   string) -> name). Names resolve bare or under `domain`; "gateway" is the router.
+   string) -> name, and optionally inUse(IP bytes, MAC string) -> whether a machine on
+   a bridged LAN has that address, so it isn't leased to that MAC here). Names resolve bare or under
+   `domain`; "gateway" is the router.
    `onLease(mac, ip)` hears about each address it leases.
    Packets for anywhere beyond the LAN go to `wan`, an uplink (see PppUplink) with
    `online`, send(packet) and forwardDns(packet), which hands replies back through
@@ -206,12 +208,19 @@ export class Router {
     let now = Date.now();
     let taken = new Map();
     for (let [m, lease] of this.leases) if (m != mac && lease.expires > now) taken.set(lease.host, m);
-    let free = host => host >= this.pool[0] && host <= this.pool[1] && !taken.has(host);
+    let inUse = host => this.names?.inUse?.(parseIp(this.subnet + '.' + host), mac);
+    let free = host => host >= this.pool[0] && host <= this.pool[1] && !taken.has(host) && !inUse(host);
     let lease = this.leases.get(mac);
     let host = lease && free(lease.host) ? lease.host
       : requested && this.onLan(requested) && free(requested[3]) ? requested[3]
       : null;
-    for (let h = this.pool[0]; !host && h <= this.pool[1]; h++) if (free(h)) host = h;
+    // Otherwise a free one from a random start, so that LANs that get bridged later
+    // are unlikely to have handed out the same addresses
+    let size = this.pool[1] - this.pool[0] + 1, start = Math.floor(Math.random() * size);
+    for (let i = 0; !host && i < size; i++) {
+      let h = this.pool[0] + (start + i) % size;
+      if (free(h)) host = h;
+    }
     if (!host) return null;
     let expires = now + seconds * 1000;
     if (lease && lease.host == host) expires = Math.max(expires, lease.expires);

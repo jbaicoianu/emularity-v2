@@ -104,6 +104,36 @@ export class LanConnection extends WorkerConnection {
   }
 }
 
+/* A bridge to another browser's LAN, plugged into this one's switch (see bridge.js,
+   which carries its frames). Frames from the other side go in with send(); `onFrame`
+   receives the ones bound for it. `onHosts` receives this LAN's machines ([{ name,
+   title, mac, ip }]) now and as they change, to tell the other side about;
+   remoteHosts() passes on the other side's. `id` and `label` identify it to viewers. */
+export class LanTrunk extends WorkerConnection {
+  constructor(onFrame, { id, label, onHosts, uplink } = {}) {
+    super({ uplink });
+    Object.assign(this, { onFrame, id, label, onHosts });
+    this.open();
+  }
+  hello() {
+    this.port.postMessage({ trunk: { id: this.id, label: this.label } });
+    if (this.remote) this.port.postMessage({ remoteHosts: this.remote }); // after a restart
+  }
+  receive(data) {
+    if (data instanceof ArrayBuffer) this.onFrame(new Uint8Array(data));
+    else if (data.hosts && this.onHosts) this.onHosts(data.hosts);
+  }
+  send(frame) {
+    if (!this.port) return;
+    let copy = frame.slice();
+    this.port.postMessage(copy.buffer, [copy.buffer]);
+  }
+  remoteHosts(hosts) {
+    this.remote = hosts;
+    if (this.port) this.port.postMessage({ remoteHosts: hosts });
+  }
+}
+
 /* Watches the LAN without joining it. `onState` receives the LAN's state now and
    whenever it changes: { gateway, domain, hosts: [{ name, title, mac, ip, joined,
    rx, tx, rate }], uplink: { status, url, username, hasPassword, dns, enabled,

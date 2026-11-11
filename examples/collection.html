@@ -4107,15 +4107,21 @@ class EmularityCollection extends HTMLElement {
     // Close any open card menu when clicking elsewhere
     document.addEventListener('click', () => this.closeMenus());
     this.addEventListener('shownetwork', () => this.showNetwork());
-    window.addEventListener('hashchange', () => this.renderRoute());
+    window.addEventListener('hashchange', () => {
+      let lanLink = this.takeLanLink();
+      this.renderRoute();
+      if (lanLink) this.useLanLink(lanLink);
+    });
     // Machines added, changed or removed in other tabs
     window.addEventListener('storage', ev => {
       if (ev.key != EmularityCollection.STORAGE_KEY) return;
       let stored = EmularityCollection.readStored();
       if (stored && this.merge(stored)) this.renderGrid();
     });
+    let lanLink = this.takeLanLink();
     if (!location.hash) history.replaceState(null, '', '#' + this.platform);
     this.renderRoute();
+    if (lanLink) this.useLanLink(lanLink);
     this.fetchMissingRatings();
     this.fetchMissingSizes();
   }
@@ -4402,6 +4408,22 @@ class EmularityCollection extends HTMLElement {
     dialog.addEventListener('close', () => dialog.remove());
     this.appendChild(dialog);
     dialog.showModal();
+    return dialog.querySelector('emularity-lan-panel');
+  }
+
+  /* A link to bridge the LAN with another browser's (#lan-invite=... or #lan-reply=...;
+     see src/net/signaling.js): show the network with it filled in. It's dropped from
+     the address bar, being single-use (and the hash is otherwise the route):
+     takeLanLink() returns its code, if there is one, and useLanLink() shows it. */
+  takeLanLink() {
+    let m = /^#(lan-invite|lan-reply)=([A-Za-z0-9_-]+)$/.exec(location.hash);
+    if (!m) return null;
+    history.replaceState(null, '', location.pathname + location.search + '#' + this.platform);
+    return m[2];
+  }
+  useLanLink(code) {
+    let panel = this.querySelector('dialog.network-dialog emularity-lan-panel') || this.showNetwork();
+    customElements.whenDefined('emularity-lan-panel').then(() => panel.useCode(code));
   }
 
   /* ----- Playing ----- */

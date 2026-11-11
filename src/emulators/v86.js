@@ -182,11 +182,13 @@ export class V86Emulator extends BaseEmulator {
   /* v86 gives its network card a random MAC address each boot, so to the LAN's DHCP
      server every boot is a new machine: it gets a new address, and the old lease is
      held for an hour. A machine that keeps its changes (`persist`, which only one tab
-     runs at a time) keeps its MAC too, made from that name. Set before the guest reads
-     it; the NE2000 also keeps a copy in its PROM. */
+     runs at a time) keeps its MAC too, made from that name and a random value kept by
+     this browser (so the same machine run in two browsers whose LANs are bridged
+     doesn't appear twice with one address). Set before the guest reads it; the NE2000
+     also keeps a copy in its PROM. */
   static setMac(devices, name) {
     let h = 0x811c9dc5; // FNV-1a
-    for (let c of new TextEncoder().encode(name)) h = Math.imul(h ^ c, 0x01000193) >>> 0;
+    for (let c of new TextEncoder().encode(V86Emulator.macSalt() + name)) h = Math.imul(h ^ c, 0x01000193) >>> 0;
     let mac = [0x00, 0x22, 0x15, h >>> 16 & 0xff, h >>> 8 & 0xff, h & 0xff]; // v86's prefix
     let ne2k = devices.net, virtio = devices.virtio_net;
     if (ne2k && ne2k.mac && ne2k.memory) {
@@ -194,6 +196,17 @@ export class V86Emulator extends BaseEmulator {
       for (let i = 0; i < 6; i++) ne2k.memory[i << 1] = ne2k.memory[i << 1 | 1] = mac[i];
     }
     if (virtio && virtio.mac) virtio.mac.set(mac);
+  }
+
+  static macSalt() {
+    const KEY = 'emularity-mac-salt';
+    try {
+      let salt = localStorage.getItem(KEY);
+      if (!salt) localStorage.setItem(KEY, salt = crypto.randomUUID().slice(0, 8) + ':');
+      return salt;
+    } catch (e) {
+      return '';
+    }
   }
 
   // When v86 loads a bzimage directly it acts as the bootloader, but it always writes

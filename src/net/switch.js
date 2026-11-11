@@ -3,7 +3,11 @@ import { macToString } from './packets.js'
 /* A learning Ethernet switch. Ports are objects with a deliver(frame) method; the
    switch learns which port each source MAC address lives behind, sends unicast frames
    only there, and floods broadcast, multicast and not-yet-learned frames to every
-   other port. */
+   other port.
+
+   A port with `trunk` set leads to another LAN (a bridge). Frames from one trunk never
+   go out another: each LAN only reaches the LANs bridged to it directly, and bridges
+   can't form a loop (which would circulate broadcasts forever). */
 export class EthernetSwitch {
   ports = new Set();
   macs = new Map(); // MAC string -> port
@@ -24,9 +28,9 @@ export class EthernetSwitch {
     let dest = frame.subarray(0, 6);
     let to = dest[0] & 1 ? null : this.macs.get(macToString(dest)); // group bit: broadcast/multicast
     if (to) {
-      if (to !== from) to.deliver(frame);
+      if (to !== from && !(to.trunk && from.trunk)) to.deliver(frame);
       return;
     }
-    for (let port of this.ports) if (port !== from) port.deliver(frame);
+    for (let port of this.ports) if (port !== from && !(port.trunk && from.trunk)) port.deliver(frame);
   }
 }

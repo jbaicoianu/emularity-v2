@@ -1,7 +1,7 @@
 import { EthernetSwitch } from './switch.js'
 import { Router } from './router.js'
 import { PppUplink } from './uplink.js'
-import { ETHERTYPE_ARP, ETHERTYPE_IPV4, parseEthernet, parseArp, parseIpv4, macToString, ipToString, sameBytes } from './packets.js'
+import { ETHERTYPE_ARP, ETHERTYPE_IPV4, PROTO_UDP, DHCP_SERVER_PORT, DHCP_CLIENT_PORT, parseEthernet, parseArp, parseIpv4, parseUdp, parseIp, macToString, ipToString, sameBytes } from './packets.js'
 
 /* The virtual LAN, as a SharedWorker: every page on this origin that connects gets the
    same switch, so machines in different tabs share one network.
@@ -22,7 +22,15 @@ import { ETHERTYPE_ARP, ETHERTYPE_IPV4, parseEthernet, parseArp, parseIpv4, macT
      which they pass back in their next hello as `previous`, so names, addresses and
      leases carry over) and the worker shuts down, and connections reconnect to a new
      instance named for that generation (see lan.js).
-   Either kind can send { provideUplink: settings }, the page's own uplink settings
+   - { trunk: { id, label } }: a bridge to another browser's LAN (see bridge.js),
+     plugged into the switch like a card but standing for every machine over there.
+     It exchanges frames the same way, is sent { hosts } (this LAN's machines: [{ name,
+     title, mac, ip }]) now and as they change, and sends { remoteHosts } (the other
+     side's). Only what concerns the machines crosses it (see crossesBridge): each LAN
+     keeps its own gateway, so DHCP, DNS and internet traffic stay on their side. The
+     other side's machines resolve by name here (where no machine here has the name),
+     and their addresses aren't leased here.
+   Any kind can send { provideUplink: settings }, the page's own uplink settings
    (PppUplink.provide), which hold until the LAN restarts; connections send them again
    when they reconnect.
 
@@ -32,15 +40,22 @@ import { ETHERTYPE_ARP, ETHERTYPE_IPV4, parseEthernet, parseArp, parseIpv4, macT
 
 const lan = new EthernetSwitch();
 const hosts = new Map();  // switch port -> { name, title, mac, ip, joined, rx, tx, rate }
+const trunks = new Map(); // switch port -> { id, label, remoteHosts, joined, rx, tx, rate }
 const monitors = new Set();
 const connections = new Set(); // every MessagePort, cards and viewers
 
 const router = new Router(lan, {
   log: message => { for (let port of lan.ports) port.report?.(message); },
   names: {
-    lookup: name => [...hosts.values()].find(h => h.name == name && h.ip)?.ip,
-    reverse: ip => [...hosts.values()].find(h => h.ip && sameBytes(h.ip, ip))?.name,
+    lookup: name => [...hosts.values()].find(h => h.name == name && h.ip)?.ip
+      ?? remoteHosts().find(h => h.name == name && h.ip)?.ip,
+    reverse: ip => [...hosts.values()].find(h => h.ip && sameBytes(h.ip, ip))?.name
+      ?? remoteHosts().find(h => h.ip && sameBytes(h.ip, ip))?.name,
     forMac: mac => [...hosts.values()].find(h => h.mac == mac)?.name,
+    // A bridged machine with the address keeps it, unless both sides already gave it
+    // out: then the machine with the lower MAC address keeps it, and the other is
+    // moved when it renews (both sides decide the same way)
+    inUse: (ip, mac) => remoteHosts().some(h => h.ip && sameBytes(h.ip, ip) && !(h.mac && mac && h.mac > mac)),
   },
   // A machine can be looked up as soon as it has an address, before it uses it
   onLease: (mac, ip) => {
@@ -72,6 +87,46 @@ function saveSettings() {
     .catch(e => console.warn('Emularity LAN: could not save uplink settings', e));
 }
 
+/* The machines on bridged LANs, with addresses as bytes */
+function remoteHosts() {
+  return [...trunks.values()].flatMap(t => t.remoteHosts);
+}
+
+/* Whether a frame may cross a bridge, either way. The LANs on either side each have
+   their own gateway, with the same addresses, so nothing to or from a gateway
+   crosses, nor DHCP (each side's machines lease from their own). */
+function crossesBridge(frame) {
+  let eth = parseEthernet(frame);
+  if (!eth || sameBytes(eth.src, router.mac) || sameBytes(eth.dest, router.mac)) return false;
+  if (eth.ethertype == ETHERTYPE_ARP) {
+    let arp = parseArp(eth.payload);
+    return !!arp && !sameBytes(arp.senderIp, router.ip) && !sameBytes(arp.targetIp, router.ip);
+  }
+  if (eth.ethertype == ETHERTYPE_IPV4) {
+    let ip = parseIpv4(eth.payload);
+    if (!ip || sameBytes(ip.src, router.ip) || sameBytes(ip.dest, router.ip)) return false;
+    if (ip.proto == PROTO_UDP) {
+      let udp = parseUdp(ip.payload);
+      let dhcp = port => port == DHCP_SERVER_PORT || port == DHCP_CLIENT_PORT;
+      if (udp && (dhcp(udp.srcPort) || dhcp(udp.destPort))) return false;
+    }
+    return true;
+  }
+  return true; // anything else (IPv6, IPX, ...) is the machines' own business
+}
+
+/* What a bridge tells the other side about this LAN's machines */
+function hostList() {
+  return [...hosts.values()].filter(h => h.mac).map(h => ({ name: h.name, title: h.title, mac: h.mac, ip: h.ip && ipToString(h.ip) }));
+}
+let sentHosts = '';
+function shareHosts(force) {
+  let list = hostList(), json = JSON.stringify(list);
+  if (json == sentHosts && !force) return;
+  sentHosts = json;
+  for (let port of trunks.keys()) port.messagePort.postMessage({ hosts: list });
+}
+
 /* A DNS-safe name, unique among the machines on the LAN */
 function uniqueName(wanted) {
   let base = String(wanted || '').toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 50) || 'host';
@@ -87,6 +142,9 @@ function state() {
     domain: router.domain,
     hosts: [...hosts.values()].map(h => ({ name: h.name, title: h.title, mac: h.mac, ip: h.ip && ipToString(h.ip), joined: h.joined, rx: h.rx, tx: h.tx, rate: h.rate })),
     uplink: { ...uplink.state(), rate: uplinkRate },
+    bridges: [...trunks.values()].map(t => ({ id: t.id, label: t.label, joined: t.joined, rx: t.rx, tx: t.tx, rate: t.rate,
+      hosts: t.remoteHosts.map(h => ({ ...h, ip: h.ip && ipToString(h.ip),
+        conflict: !!(h.ip && [...hosts.values()].some(l => l.ip && sameBytes(l.ip, h.ip))) })) })),
     sample: history.seconds[history.seconds.length - 1],
   };
 }
@@ -113,6 +171,10 @@ setInterval(() => {
     h.rate = smooth(h.rate, bytesIn, bytesOut, seconds);
     h.sampled = { rx: h.rx, tx: h.tx };
     sample.hosts[h.name] = [Math.round(bytesIn / seconds), Math.round(bytesOut / seconds)];
+  }
+  for (let t of trunks.values()) {
+    t.rate = smooth(t.rate, t.rx - t.sampled.rx, t.tx - t.sampled.tx, seconds);
+    t.sampled = { rx: t.rx, tx: t.tx };
   }
   let upIn = uplink.rx - lastSample.uplink.rx, upOut = uplink.tx - lastSample.uplink.tx;
   uplinkRate = smooth(uplinkRate, upIn, upOut, seconds);
@@ -155,6 +217,7 @@ function publish() {
     publishPending = false;
     let s = state();
     for (let m of monitors) m.postMessage({ state: s });
+    shareHosts();
   });
 }
 
@@ -190,7 +253,7 @@ onconnect = ev => {
   connections.add(messagePort);
   let port = null; // set once the connection says it's a network card
   let unplug = () => {
-    if (port) { lan.detach(port); hosts.delete(port); port = null; publish(); }
+    if (port) { lan.detach(port); hosts.delete(port); trunks.delete(port); port = null; publish(); }
     monitors.delete(messagePort);
     connections.delete(messagePort);
   };
@@ -199,6 +262,13 @@ onconnect = ev => {
     if (data instanceof ArrayBuffer) {
       if (!port) return;
       let frame = new Uint8Array(data);
+      let trunk = trunks.get(port);
+      if (trunk) {
+        if (!crossesBridge(frame)) return;
+        trunk.rx += frame.length;
+        lan.forward(port, frame);
+        return;
+      }
       let host = hosts.get(port);
       host.tx += frame.length;
       learn(host, frame);
@@ -218,6 +288,36 @@ onconnect = ev => {
       settingsLoaded.then(() => uplink.reset());
     } else if (data && data.provideUplink) {
       settingsLoaded.then(() => uplink.provide(data.provideUplink));
+    } else if (data && data.trunk && !port) {
+      port = {
+        messagePort,
+        trunk: true,
+        deliver(frame) {
+          if (!crossesBridge(frame)) return;
+          let trunk = trunks.get(port);
+          if (trunk) trunk.tx += frame.length;
+          let copy = frame.slice();
+          messagePort.postMessage(copy.buffer, [copy.buffer]);
+        },
+      };
+      trunks.set(port, { id: String(data.trunk.id || ''), label: String(data.trunk.label || ''), remoteHosts: [], joined: Date.now(),
+        rx: 0, tx: 0, sampled: { rx: 0, tx: 0 }, rate: { in: 0, out: 0 } });
+      lan.attach(port);
+      messagePort.postMessage({ hosts: hostList() });
+      publish();
+    } else if (data && data.remoteHosts && port && trunks.has(port)) {
+      // From the other browser, so checked: only plausible names and addresses
+      let list = Array.isArray(data.remoteHosts) ? data.remoteHosts.slice(0, 256) : [];
+      trunks.get(port).remoteHosts = list.map(h => {
+        let ip = typeof h?.ip == 'string' && /^\d+\.\d+\.\d+\.\d+$/.test(h.ip) ? parseIp(h.ip) : null;
+        return {
+          name: String(h?.name || '').toLowerCase().replace(/[^a-z0-9-]+/g, '-').slice(0, 63),
+          title: String(h?.title || '').slice(0, 200),
+          mac: typeof h?.mac == 'string' && /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/.test(h.mac) ? h.mac : null,
+          ip: ip && router.onLan(ip) && !sameBytes(ip, router.ip) ? ip : null,
+        };
+      }).filter(h => h.name && h.name != 'gateway');
+      publish();
     } else if (data && data.hello && !port) {
       port = {
         messagePort,
