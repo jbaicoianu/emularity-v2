@@ -2,6 +2,7 @@ import { LanMonitor } from './lan.js'
 import { LanGraph } from './lan-graph.js'
 import { LanBridge } from './bridge.js'
 import { ManualSignaling } from './signaling.js'
+import { LanBridgeWizard } from './bridge-wizard.js'
 
 /* <emularity-lan-panel>: a live view of the virtual LAN. A map (the internet as a cloud
    above the gateway, machines below) and a table of machines with their names and
@@ -10,10 +11,10 @@ import { ManualSignaling } from './signaling.js'
    document. Its `uplink` attribute names the page's uplink settings file (see
    LanMonitor).
 
-   It also bridges the LAN with other browsers' (see bridge.js): inviting another, or
-   joining with an invitation, with the codes passed along by hand (as links or QR
-   codes; see signaling.js). useCode() takes an invitation or reply, e.g. from a link
-   the page was opened with. */
+   It also bridges the LAN with other browsers' (see bridge.js), set up in a modal
+   that walks through passing links between friends (see bridge-wizard.js), and lists
+   the bridges. useCode() takes an invitation or reply link (or code), e.g. one the
+   page was opened with. */
 
 const STATUS_TEXT = {
   off: 'offline', connecting: 'connecting…', authenticating: 'logging in…',
@@ -52,18 +53,10 @@ export class LanPanel extends HTMLElement {
       <p class="lan-empty">No machines are on the network. Machines join it when they start with networking enabled.</p>
       <section class="lan-bridges">
         <h4>Other networks</h4>
-        <p class="field-hint">Bridge this network with someone else's, in another browser, so machines on either can reach each other. Each side keeps its own gateway and internet connection.</p>
+        <p class="field-hint">Connect this network with a friend's, in their browser, so your machines can reach each other. Each side keeps its own internet connection.</p>
         <div class="lan-bridge-list"></div>
         <p class="lan-bridge-message" hidden></p>
-        <form class="lan-join-form" hidden>
-          <label>Invitation (a link or code someone sent you) <textarea name="code" rows="3" spellcheck="false"></textarea></label>
-          <div class="lan-bridge-buttons"><button type="submit">Join their network</button> <button type="button" class="lan-join-cancel">Cancel</button></div>
-        </form>
-        <div class="lan-bridge-buttons lan-bridge-start">
-          <label class="lan-bridge-label">Your name, as others see it <input name="label" type="text" maxlength="40" placeholder="e.g. Alex"></label>
-          <button type="button" class="lan-invite">Invite another network…</button>
-          <button type="button" class="lan-join">Use an invitation…</button>
-        </div>
+        <div class="lan-bridge-buttons"><button type="button" class="lan-connect-friend">Connect with a friend's network…</button></div>
       </section>
       <div class="lan-actions">
         <button type="button" class="lan-restart" title="Restart the switch, router and uplink (and load any updated networking code). Running machines stay connected.">Restart network</button>
@@ -94,6 +87,7 @@ export class LanPanel extends HTMLElement {
     this.monitor = null;
     if (this.onBridgeChange) LanBridge.events.removeEventListener('change', this.onBridgeChange);
     if (this.onBridgeError) LanBridge.events.removeEventListener('error', this.onBridgeError);
+    this.wizard?.setBridge(null);
   }
   toggleUplinkForm() {
     let form = this.querySelector('form');
@@ -148,35 +142,12 @@ export class LanPanel extends HTMLElement {
   /* ----- Bridges to other browsers' LANs ----- */
 
   setupBridges() {
-    const LABEL_KEY = 'emularity-lan-label';
-    let labelInput = this.querySelector('.lan-bridge-label input');
-    try { labelInput.value = localStorage.getItem(LABEL_KEY) || ''; } catch (e) {}
-    labelInput.addEventListener('change', () => { try { localStorage.setItem(LABEL_KEY, labelInput.value.trim()); } catch (e) {} });
-    this.bridgeLabel = () => labelInput.value.trim();
-    let joinForm = this.querySelector('.lan-join-form');
-    this.querySelector('.lan-invite').addEventListener('click', async ev => {
-      ev.target.disabled = true;
-      this.bridgeMessage('Preparing an invitation…');
-      try {
-        await LanBridge.invite({ label: this.bridgeLabel(), uplink: this.getAttribute('uplink') });
-        this.bridgeMessage('');
-      } catch (e) {
-        this.bridgeMessage("Couldn't make an invitation: " + e.message, true);
-      }
-      ev.target.disabled = false;
-    });
-    this.querySelector('.lan-join').addEventListener('click', () => {
-      joinForm.hidden = false;
-      joinForm.elements.code.focus();
-    });
-    this.querySelector('.lan-join-cancel').addEventListener('click', () => { joinForm.hidden = true; joinForm.reset(); });
-    joinForm.addEventListener('submit', ev => {
-      ev.preventDefault();
-      this.useCode(joinForm.elements.code.value, true);
-    });
+    this.wizard = new LanBridgeWizard(this, { uplink: this.getAttribute('uplink') });
+    this.querySelector('.lan-connect-friend').addEventListener('click', () => { this.bridgeMessage(''); this.wizard.open(); });
     this.onBridgeChange = () => this.renderBridges();
     LanBridge.events.addEventListener('change', this.onBridgeChange);
-    this.onBridgeError = ev => this.bridgeMessage(ev.detail.error, true);
+    // Failures show in the wizard if it's open, and here otherwise
+    this.onBridgeError = ev => { if (!this.wizard.dialog.open) this.bridgeMessage(ev.detail.error, true); };
     LanBridge.events.addEventListener('error', this.onBridgeError);
     this.renderBridges();
   }
@@ -188,50 +159,32 @@ export class LanPanel extends HTMLElement {
     p.classList.toggle('lan-error', error);
   }
 
-  /* An invitation or reply (a code, or a link with one). An invitation fills in the
-     join form, to join when the user confirms (or straight away if `confirmed`); a
-     reply goes to the invitation waiting for it, in whichever tab that is. */
-  async useCode(text, confirmed = false) {
-    let joinForm = this.querySelector('.lan-join-form');
+  /* An invitation or reply (a link, or its code). An invitation opens the wizard to
+     join; a reply goes to the invitation waiting for it, in whichever tab that is
+     (where the wizard, if open, moves on). */
+  async useCode(text) {
     let message;
     try {
       message = await ManualSignaling.decode(text);
     } catch (e) {
       return this.bridgeMessage(e.message, true);
     }
-    if (message.type == 'answer') {
-      joinForm.hidden = true;
-      joinForm.reset();
-      let mine = [...LanBridge.all].find(b => b.id == message.id);
-      try {
-        if (mine) await mine.acceptAnswer(message);
-        else if (await LanBridge.deliver(message)) this.bridgeMessage("Reply passed to the tab with the invitation: it's connecting there.");
-        else this.bridgeMessage('No invitation in this browser is waiting for that reply. It has to be used in the tab that made the invitation, while that stays open.', true);
-      } catch (e) {
-        this.bridgeMessage(e.message, true);
-      }
-      return;
-    }
-    if (!confirmed) {
-      joinForm.hidden = false;
-      joinForm.elements.code.value = text;
-      this.bridgeMessage((message.label || 'Someone') + ' invited you to bridge your network with theirs. Their machines will be able to reach yours, and yours theirs.');
-      joinForm.querySelector('[type="submit"]').focus();
-      return;
-    }
-    this.bridgeMessage('Preparing a reply…');
+    if (message.type == 'offer') return this.wizard.openInvitation(message);
+    let mine = [...LanBridge.all].find(b => b.id == message.id);
     try {
-      await LanBridge.join(message, { label: this.bridgeLabel(), uplink: this.getAttribute('uplink') });
-      joinForm.hidden = true;
-      joinForm.reset();
-      this.bridgeMessage('');
+      if (mine) {
+        await mine.acceptAnswer(message);
+        this.wizard.resume(mine);
+      } else if (await LanBridge.deliver(message)) {
+        this.bridgeMessage("Reply received: your other tab, with the invitation, is connecting now. You can close this one.");
+      } else {
+        this.bridgeMessage('No invitation in this browser is waiting for that reply. Open it in the browser that made the invitation, while its tab is still open.', true);
+      }
     } catch (e) {
       this.bridgeMessage(e.message, true);
     }
   }
 
-  /* A card per bridge this page holds (rebuilt only when its status changes, so a
-     reply being typed isn't lost), and a line for those other tabs hold */
   renderBridges() {
     let list = this.querySelector('.lan-bridge-list');
     if (!list) return;
@@ -264,78 +217,33 @@ export class LanPanel extends HTMLElement {
     if (wanted.length != list.children.length || wanted.some((c, i) => list.children[i] !== c)) list.replaceChildren(...wanted);
   }
 
+  /* A bridge being set up: who with, and a way back into the wizard */
   bridgeCard(bridge) {
     let card = document.createElement('div');
     card.className = 'lan-bridge lan-bridge-' + bridge.status;
     card.bridgeId = bridge.id;
     card.status = bridge.status;
-    let who = bridge.remoteLabel || 'the other browser';
-    let close = text => {
+    let who = bridge.remoteLabel || (bridge.status == 'inviting' ? 'a friend' : 'your friend');
+    let line = document.createElement('p');
+    let button = (text, action) => {
       let b = document.createElement('button');
       b.type = 'button';
       b.textContent = text;
-      b.addEventListener('click', () => bridge.close());
+      b.addEventListener('click', action);
       return b;
     };
-    let p = (text, cls) => {
-      let e = document.createElement('p');
-      e.textContent = text;
-      if (cls) e.className = cls;
-      return e;
-    };
-    if (bridge.status == 'inviting' || bridge.status == 'answering') {
-      let inviting = bridge.status == 'inviting';
-      let message = inviting ? bridge.offer : bridge.answer;
-      card.append(p(inviting
-        ? '1. Send this invitation to the person whose network you want to bridge with (it works once, while this tab stays open):'
-        : '2. Send this reply back to ' + who + ', to open or paste into the tab with the invitation:'));
-      let share = this.shareBox(message);
-      card.append(share);
-      if (inviting) {
-        let form = document.createElement('form');
-        form.className = 'lan-answer-form';
-        form.innerHTML = `<label>3. Then paste their reply here (or open their reply link in this browser) <textarea name="code" rows="2" spellcheck="false"></textarea></label>
-          <div class="lan-bridge-buttons"><button type="submit">Connect</button></div>`;
-        form.addEventListener('submit', ev => { ev.preventDefault(); this.useCode(form.elements.code.value); });
-        card.append(form);
-      } else {
-        card.append(p('Waiting for ' + who + ' to use it… Keep this tab open.', 'field-hint'));
-      }
-      card.append(close('Cancel'));
-    } else if (bridge.status == 'connecting') {
-      card.append(p('Connecting to ' + who + '…'), close('Cancel'));
-    } else if (bridge.status == 'connected') {
-      let line = p('⇄ Bridged with ' + who + "'s network");
+    if (bridge.status == 'connected') {
+      line.textContent = '⇄ Connected with ' + who + "'s network";
       let stats = document.createElement('span');
       stats.className = 'lan-bridge-stats';
       line.append(' · ', stats);
-      card.append(line, p('This tab carries the bridge: closing it disconnects.', 'field-hint'), close('Disconnect'));
+      card.append(line, button('Disconnect', () => bridge.close()));
+    } else {
+      line.textContent = { inviting: 'Invitation waiting for a reply', answering: 'Waiting for ' + who + ' to open your reply',
+        connecting: 'Connecting to ' + who + '…' }[bridge.status] || bridge.status;
+      card.append(line, button('Continue…', () => this.wizard.resume(bridge)), ' ', button('Cancel', () => bridge.close()));
     }
     return card;
-  }
-
-  /* A message as a link to copy, with a QR code for it */
-  shareBox(message) {
-    let box = document.createElement('div');
-    box.className = 'lan-share';
-    box.innerHTML = `<canvas class="lan-qr" hidden></canvas><div class="lan-share-text"><input type="text" readonly> <button type="button">Copy link</button></div>`;
-    let input = box.querySelector('input'), button = box.querySelector('button');
-    ManualSignaling.link(message).then(link => {
-      input.value = link;
-      drawQr(box.querySelector('canvas'), link);
-    });
-    input.addEventListener('focus', () => input.select());
-    button.addEventListener('click', async () => {
-      try {
-        await navigator.clipboard.writeText(input.value);
-        button.textContent = 'Copied';
-      } catch (e) {
-        input.select();
-        button.textContent = 'Press Ctrl+C';
-      }
-      setTimeout(() => { button.textContent = 'Copy link'; }, 2000);
-    });
-    return box;
   }
 
   /* The uplink settings form: fields filled from the saved settings (unless the user is
@@ -371,7 +279,7 @@ export class LanPanel extends HTMLElement {
   renderMap(state, hosts, bridges) {
     let up = state.uplink || { status: 'off' };
     let topology = JSON.stringify([state.gateway, up.status, up.session && up.session.ip, hosts.map(h => [h.name, h.ip]),
-      bridges.map(b => [b.id, b.label, b.hosts.length])]);
+      bridges.map(b => [b.id, b.label, b.hosts.map(h => [h.name, h.ip, h.conflict])])]);
     if (topology != this.topology) {
       this.topology = topology;
       this.buildMap(state, hosts, bridges);
@@ -388,8 +296,9 @@ export class LanPanel extends HTMLElement {
       for (let c of children) e.append(c);
       return e;
     };
+    let maxName = bridges.length ? 20 : 24;
     let box = (x, y, name, ip, cls, tooltip, rx = 6) => {
-      if (name.length > 24) name = name.slice(0, 23) + '…'; // the full name is in the tooltip and table
+      if (name.length > maxName) name = name.slice(0, maxName - 1) + '…'; // the full name is in the tooltip and table
       let w = Math.max(104, name.length * 6.6 + 16); // fits 11px text
       return el('g', { class: 'lan-node ' + cls },
         el('rect', { x: x - w / 2, y: y - 17, width: w, height: 34, rx }),
@@ -407,21 +316,23 @@ export class LanPanel extends HTMLElement {
       g.ends = { a, b };
       return g;
     };
+    // Machines in rows of up to `perRow` across a column centred on `cx`, from `top`
+    const ROW = 58;
+    let place = (list, cx, width, top, perRow) => list.map((item, i) => {
+      let row = Math.floor(i / perRow), inRow = Math.min(perRow, list.length - row * perRow);
+      return { item, at: { x: cx - width / 2 + width * ((i % perRow) + 0.5) / inRow, y: top + row * ROW } };
+    });
+    let rowsOf = (n, perRow) => Math.ceil(n / perRow) || 1;
 
-    // The internet at the top, the gateway below it, and machines in rows of up to four
-    // under that, so traffic fans out from the uplink to the machines using it
+    // This browser's segment: the internet at the top, the gateway below it, and its
+    // machines under that, so traffic fans out from the uplink to the machines using
+    // it. With bridges, it takes the left half, and each bridged network is a segment
+    // on the right, its machines hanging off the far end of the tunnel to it.
+    let split = bridges.length > 0;
+    let localCx = split ? 160 : 320, localW = split ? 320 : 640, perRow = split ? 2 : 4;
     let up = state.uplink || { status: 'off' };
-    // Bridged networks sit among the machines, as the switch ports they are
-    let nodes0 = hosts.map(h => ({ key: 'host:' + h.name, name: h.name, ip: h.ip || '…', cls: h.ip ? '' : 'lan-pending',
-      tooltip: (h.title ? h.title + '\n' : '') + (h.mac || '') }))
-      .concat(bridges.map(b => ({ key: 'bridge:' + b.id, name: '⇄ ' + (b.label || 'other network'),
-        ip: b.hosts.length + ' machine' + (b.hosts.length == 1 ? '' : 's'), cls: 'lan-bridge-node',
-        tooltip: 'Bridged network: ' + (b.hosts.map(h => h.name).join(', ') || 'no machines yet') })));
-    let perRow = 4, rows = Math.ceil(nodes0.length / perRow) || 1;
-    let height = 250 + rows * 58 + 20;
-    svg.setAttribute('viewBox', '0 0 640 ' + height);
-    let gateway = { x: 320, y: 150 }, cloudAt = { x: 320, y: 66 };
-    let cloud = el('g', { class: 'lan-cloud lan-uplink-' + up.status, role: 'button', tabindex: 0 },
+    let gateway = { x: localCx, y: 150 }, cloudAt = { x: localCx, y: 66 };
+    let cloud = el('g', { class: 'lan-cloud lan-uplink-' + up.status, role: 'button', tabindex: 0, transform: `translate(${localCx - 320},0)` },
       el('path', { d: 'M276,66 a20,20 0 0,1 2,-40 a28,28 0 0,1 50,-10 a24,24 0 0,1 40,14 a18,18 0 0,1 -4,36 z' }),
       el('text', { x: 320, y: 42, class: 'lan-name' }, 'Internet'),
       el('text', { x: 320, y: 56, class: 'lan-ip' }, up.session ? up.session.ip : STATUS_TEXT[up.status] || up.status),
@@ -429,20 +340,53 @@ export class LanPanel extends HTMLElement {
     cloud.addEventListener('click', () => this.toggleUplinkForm());
     cloud.addEventListener('keydown', ev => { if (ev.key == 'Enter' || ev.key == ' ') { ev.preventDefault(); this.toggleUplinkForm(); } });
 
-    let flows = [flow('uplink', cloudAt, gateway, 'lan-uplink-flow lan-uplink-' + up.status)], nodes = [];
-    nodes0.forEach((n, i) => {
-      let row = Math.floor(i / perRow), inRow = Math.min(perRow, nodes0.length - row * perRow);
-      let at = { x: 640 * ((i % perRow) + 0.5) / inRow, y: 260 + row * 58 };
-      flows.push(flow(n.key, gateway, at)); // `in`: toward the machine
-      nodes.push(box(at.x, at.y, n.name, n.ip, n.cls, n.tooltip));
-    });
+    let under = [], flows = [flow('uplink', cloudAt, gateway, 'lan-uplink-flow lan-uplink-' + up.status)], nodes = [];
+    for (let { item: h, at } of place(hosts, localCx, localW, 260, perRow)) {
+      flows.push(flow('host:' + h.name, gateway, at)); // `in`: toward the machine
+      nodes.push(box(at.x, at.y, h.name, h.ip || '…', h.ip ? '' : 'lan-pending', (h.title ? h.title + '\n' : '') + (h.mac || '')));
+    }
+    let bottom = 260 + rowsOf(hosts.length, perRow) * ROW;
+
+    let top = 110;
+    for (let b of bridges) {
+      let who = (b.label || 'Another browser') + "'s network";
+      let remoteRows = rowsOf(b.hosts.length, 2);
+      let height = 76 + remoteRows * ROW;
+      let end = { x: 480, y: top + 40 }; // where the tunnel comes out: their switch
+      under.push(el('g', { class: 'lan-segment' },
+        el('rect', { x: 334, y: top, width: 296, height, rx: 10 }),
+        el('text', { x: 620, y: top + 18, class: 'lan-segment-name' }, who),
+        el('title', {}, who + ': its machines, bridged with this network. It has its own gateway and internet connection.')));
+      // The tunnel: a pipe from this network's switch (at the gateway) to theirs,
+      // carrying the bridge's traffic as its bands
+      // labelled between the gateway's box and the segment
+      let labelX = (gateway.x + 56 + 334) / 2, labelY = gateway.y + (end.y - gateway.y) * (labelX - gateway.x) / (end.x - gateway.x);
+      under.push(el('g', { class: 'lan-tunnel' },
+        el('line', { x1: gateway.x, y1: gateway.y, x2: end.x, y2: end.y, class: 'lan-tunnel-pipe' }),
+        el('line', { x1: gateway.x, y1: gateway.y, x2: end.x, y2: end.y, class: 'lan-tunnel-bore' }),
+        el('text', { x: labelX, y: labelY - 17, class: 'lan-tunnel-label' }, '⇄ tunnel'),
+        el('title', {}, 'Bridge to ' + who)));
+      flows.push(flow('bridge:' + b.id, gateway, end, 'lan-tunnel-flow'));
+      nodes.push(el('circle', { cx: end.x, cy: end.y, r: 5, class: 'lan-tunnel-end' }));
+      for (let { item: h, at } of place(b.hosts, 480, 296, top + 100, 2)) {
+        under.push(el('line', { x1: end.x, y1: end.y, x2: at.x, y2: at.y, class: 'lan-link lan-remote-link' }));
+        nodes.push(box(at.x, at.y, h.name, (h.ip || '…') + (h.conflict ? ' ⚠' : ''), 'lan-remote-node' + (h.conflict ? ' lan-conflict' : ''),
+          (h.title ? h.title + '\n' : '') + (h.mac || '') + '\non ' + who + (h.conflict ? '\nSame address as a machine here' : '')));
+      }
+      if (!b.hosts.length) nodes.push(el('text', { x: 480, y: top + 104, class: 'lan-segment-empty' }, 'no machines yet'));
+      top += height + 24;
+      bottom = Math.max(bottom, top);
+    }
+
     let gw = box(gateway.x, gateway.y, 'gateway', state.gateway, 'lan-gateway', 'Router: DHCP, DNS, NAT', 17);
+    let height = bottom + 20;
+    svg.setAttribute('viewBox', '0 0 640 ' + height);
     let legend = el('g', { class: 'lan-legend' },
       el('line', { x1: 8, y1: height - 8, x2: 24, y2: height - 8, class: 'lan-band lan-band-in', 'stroke-width': 4 }),
       el('text', { x: 28, y: height - 5 }, 'to a machine / from the internet'),
       el('line', { x1: 196, y1: height - 8, x2: 212, y2: height - 8, class: 'lan-band lan-band-out', 'stroke-width': 4 }),
       el('text', { x: 216, y: height - 5 }, 'from a machine / to the internet'));
-    svg.replaceChildren(...flows, legend, cloud, ...nodes, gw); // links under the boxes
+    svg.replaceChildren(...under, ...flows, legend, cloud, ...nodes, gw); // links under the boxes
     this.flows = new Map(flows.map(f => [f.dataset.key, f]));
   }
 
@@ -488,27 +432,3 @@ export class LanPanel extends HTMLElement {
   }
 }
 
-/* A QR code for `text`, drawn on `canvas` (shown once drawn). The encoder is loaded
-   when first needed; without it (offline, say) there's just the link. */
-let qrLibrary = null;
-async function drawQr(canvas, text) {
-  try {
-    qrLibrary ||= import('https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/+esm').then(m => m.default);
-    let qrcode = await qrLibrary;
-    let qr = qrcode(0, 'L');
-    qr.addData(text);
-    qr.make();
-    let n = qr.getModuleCount(), margin = 4, scale = Math.max(2, Math.floor(240 / (n + margin * 2)));
-    canvas.width = canvas.height = (n + margin * 2) * scale;
-    let ctx = canvas.getContext('2d');
-    ctx.fillStyle = '#fff';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = '#000';
-    for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) {
-      if (qr.isDark(r, c)) ctx.fillRect((c + margin) * scale, (r + margin) * scale, scale, scale);
-    }
-    canvas.hidden = false;
-  } catch (e) {
-    console.warn('Emularity LAN: no QR code', e);
-  }
-}

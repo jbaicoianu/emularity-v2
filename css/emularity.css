@@ -446,65 +446,6 @@ emularity-keyboard[layout="numpad"] .keyboard-key.Numpad0 {
   color: #8ab;
   font-family: monospace;
 }
-.emularity-lan-panel .lan-share {
-  display: flex;
-  flex-wrap: wrap;
-  gap: .75em;
-  align-items: center;
-  margin: .5em 0;
-}
-.emularity-lan-panel .lan-qr {
-  width: 180px;
-  height: 180px;
-  image-rendering: pixelated;
-  border-radius: 4px;
-}
-.emularity-lan-panel .lan-share-text {
-  flex: 1 1 16em;
-  display: flex;
-  gap: .5em;
-}
-.emularity-lan-panel .lan-bridges input[type="text"],
-.emularity-lan-panel .lan-bridges textarea {
-  flex: 1;
-  min-width: 0;
-  box-sizing: border-box;
-  padding: .4em .5em;
-  background: #000;
-  color: #ddd;
-  border: 1px solid #444;
-  border-radius: 4px;
-  font-family: monospace;
-  font-size: .9em;
-}
-.emularity-lan-panel .lan-bridges textarea {
-  display: block;
-  width: 100%;
-  margin-top: .25em;
-  resize: vertical;
-  word-break: break-all;
-}
-.emularity-lan-panel .lan-bridges label {
-  display: block;
-  color: #aaa;
-  margin: .5em 0;
-}
-.emularity-lan-panel .lan-bridge-start {
-  display: flex;
-  flex-wrap: wrap;
-  gap: .5em;
-  align-items: flex-end;
-}
-.emularity-lan-panel .lan-bridge-start .lan-bridge-label {
-  flex: 1 1 12em;
-  margin: 0;
-}
-.emularity-lan-panel .lan-bridge-start .lan-bridge-label input {
-  display: block;
-  width: 100%;
-  margin-top: .25em;
-  font-family: inherit;
-}
 .emularity-lan-panel .lan-bridges button {
   background: #1a3a44;
   color: #ddd;
@@ -523,14 +464,250 @@ emularity-keyboard[layout="numpad"] .keyboard-key.Numpad0 {
 .emularity-lan-panel .lan-bridge-message.lan-error {
   color: #e8a54b;
 }
-.emularity-lan-panel .lan-node.lan-bridge-node rect {
-  fill: #2a2236;
+/* A bridged network on the map: a segment of its own, reached through a tunnel */
+.emularity-lan-panel .lan-segment rect {
+  fill: rgba(176, 138, 216, .05);
+  stroke: #6d5a8a;
+  stroke-dasharray: 6 4;
+}
+.emularity-lan-panel .lan-segment-name {
+  fill: #b9a6d6;
+  font: bold 11px sans-serif;
+  text-anchor: end;
+}
+.emularity-lan-panel .lan-segment-empty {
+  fill: #777;
+  font: italic 11px sans-serif;
+  text-anchor: middle;
+}
+.emularity-lan-panel .lan-tunnel-pipe {
+  stroke: #6d5a8a;
+  stroke-width: 24;
+  stroke-linecap: round;
+}
+.emularity-lan-panel .lan-tunnel-bore {
+  stroke: #161220;
+  stroke-width: 20;
+  stroke-linecap: round;
+}
+.emularity-lan-panel .lan-tunnel-label {
+  fill: #b9a6d6;
+  font: 10px sans-serif;
+  text-anchor: middle;
+}
+.emularity-lan-panel .lan-tunnel-flow .lan-link {
+  stroke: #4a3d5e;
+}
+.emularity-lan-panel .lan-tunnel-end {
+  fill: #b08ad8;
+}
+.emularity-lan-panel .lan-remote-link {
+  stroke: #6d5a8a;
+}
+.emularity-lan-panel .lan-node.lan-remote-node rect {
+  fill: #1f1a2a;
   stroke: #b08ad8;
+}
+.emularity-lan-panel .lan-node.lan-conflict rect {
+  stroke: #e8a54b;
 }
 .emularity-lan-panel tr.lan-remote td {
   color: #b9a6d6;
 }
 .emularity-lan-panel tr.lan-conflict td:nth-child(2) {
+  color: #e8a54b;
+}
+/* The walkthrough for connecting with a friend's network (bridge-wizard.js) */
+.lan-wizard {
+  background: #111;
+  color: #ddd;
+  border: 1px solid #444;
+  border-radius: 8px;
+  padding: 1.5em;
+  width: 560px;
+  max-width: 92vw;
+  box-sizing: border-box;
+}
+.lan-wizard::backdrop {
+  background: rgba(0, 0, 0, .6);
+}
+.lan-wizard h3 {
+  margin: 0 2em .6em 0;
+}
+.lan-wizard h4 {
+  margin: 1em 0 .3em;
+}
+.lan-wizard p {
+  margin: .4em 0;
+  line-height: 1.4;
+}
+.lan-wizard .lan-wizard-close {
+  position: absolute;
+  top: .8em;
+  right: .8em;
+  background: none;
+  border: none;
+  color: #888;
+  font-size: 1.1em;
+  cursor: pointer;
+}
+.lan-wizard .lan-wizard-progress {
+  display: flex;
+  gap: .4em;
+  list-style: none;
+  padding: 0;
+  margin: 0 0 1em;
+  counter-reset: step;
+  font-size: .8em;
+}
+.lan-wizard .lan-wizard-progress li {
+  flex: 1;
+  padding-top: .5em;
+  border-top: 3px solid #333;
+  color: #666;
+  counter-increment: step;
+}
+.lan-wizard .lan-wizard-progress li::before {
+  content: counter(step) ". ";
+}
+.lan-wizard .lan-wizard-progress li.done {
+  border-color: #3a6f7a;
+  color: #8ab;
+}
+.lan-wizard .lan-wizard-progress li.current {
+  border-color: #49c8d7;
+  color: #ddd;
+}
+.lan-wizard label {
+  display: block;
+  margin: .75em 0;
+  color: #aaa;
+}
+.lan-wizard input[type="text"],
+.lan-wizard textarea {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: .25em;
+  padding: .5em;
+  background: #000;
+  color: #ddd;
+  border: 1px solid #444;
+  border-radius: 4px;
+  font-size: 1em;
+}
+.lan-wizard textarea {
+  font-family: monospace;
+  font-size: .85em;
+  resize: vertical;
+  word-break: break-all;
+}
+.lan-wizard .lan-wizard-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5em;
+  margin-top: .75em;
+}
+.lan-wizard button {
+  background: none;
+  color: #ccc;
+  border: 1px solid #555;
+  border-radius: 6px;
+  padding: .5em 1.1em;
+  font-size: 1em;
+  cursor: pointer;
+}
+.lan-wizard button:hover {
+  border-color: #888;
+}
+.lan-wizard button.primary {
+  background: #0c1c1f;
+  color: #49c8d7;
+  border-color: #49c8d7;
+}
+.lan-wizard button:disabled {
+  opacity: .5;
+  cursor: default;
+}
+.lan-wizard .lan-wizard-choices {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13em, 1fr));
+  gap: .75em;
+  margin: 1em 0 .5em;
+}
+.lan-wizard .lan-wizard-choice {
+  display: flex;
+  flex-direction: column;
+  gap: .3em;
+  text-align: left;
+  padding: 1em;
+  border-color: #3a6f7a;
+}
+.lan-wizard .lan-wizard-choice:hover,
+.lan-wizard .lan-wizard-choice:focus-visible {
+  border-color: #49c8d7;
+  background: #0c1c1f;
+}
+.lan-wizard .lan-wizard-choice strong {
+  color: #49c8d7;
+}
+.lan-wizard .lan-wizard-choice span {
+  color: #999;
+  font-size: .85em;
+}
+.lan-wizard .lan-share {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1em;
+  align-items: center;
+  margin: .75em 0;
+}
+.lan-wizard .lan-qr {
+  width: 160px;
+  height: 160px;
+  image-rendering: pixelated;
+  border-radius: 4px;
+}
+.lan-wizard .lan-share-main {
+  flex: 1 1 14em;
+  min-width: 0;
+}
+.lan-wizard .lan-share-main input {
+  font-family: monospace;
+  font-size: .85em;
+  text-overflow: ellipsis;
+}
+.lan-wizard .lan-wizard-reply {
+  border-top: 1px solid #2a2a2a;
+  margin-top: 1em;
+}
+.lan-wizard .lan-wizard-note {
+  color: #999;
+  font-size: .9em;
+}
+.lan-wizard .lan-wizard-waiting::before {
+  content: '';
+  display: inline-block;
+  width: .8em;
+  height: .8em;
+  margin-right: .5em;
+  border: 2px solid #49c8d7;
+  border-right-color: transparent;
+  border-radius: 50%;
+  vertical-align: -.1em;
+  animation: lan-wizard-spin .8s linear infinite;
+}
+@keyframes lan-wizard-spin {
+  to { transform: rotate(360deg); }
+}
+.lan-wizard .lan-wizard-success {
+  color: #6c6;
+  font-size: 1.2em;
+}
+.lan-wizard .lan-wizard-status {
+  color: #8ab;
+}
+.lan-wizard .lan-wizard-error {
   color: #e8a54b;
 }
 /* The bandwidth graph (lan-graph.js) */
